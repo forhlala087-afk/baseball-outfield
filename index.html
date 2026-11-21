@@ -2,8 +2,47 @@
 <html lang="zh-TW">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>3D 外野飛球模擬器｜前？後？</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>外野飛球 3D</title>
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="外野飛球">
+<meta name="theme-color" content="#0b1622">
+<script>
+  (() => {
+    const c = document.createElement('canvas');
+    c.width = c.height = 512;
+    const g = c.getContext('2d');
+    g.fillStyle = '#14452f';
+    g.fillRect(0, 0, 512, 512);
+    g.font = '320px sans-serif';
+    g.textAlign = 'center';
+    g.textBaseline = 'middle';
+    g.fillText('⚾', 256, 276);
+    const icon = c.toDataURL('image/png');
+
+    const addLink = (rel, href) => {
+      const l = document.createElement('link');
+      l.rel = rel;
+      l.href = href;
+      document.head.appendChild(l);
+    };
+    addLink('icon', icon);
+    addLink('apple-touch-icon', icon);
+
+    const manifest = {
+      name: '外野飛球 3D',
+      short_name: '外野飛球',
+      display: 'standalone',
+      background_color: '#0b1622',
+      theme_color: '#0b1622',
+      start_url: location.href,
+      icons: [{ src: icon, sizes: '512x512', type: 'image/png' }]
+    };
+    addLink('manifest', 'data:application/manifest+json;charset=utf-8,' + encodeURIComponent(JSON.stringify(manifest)));
+  })();
+</script>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
   html, body { width: 100%; height: 100%; overflow: hidden; background: #0b1622; font-family: -apple-system, BlinkMacSystemFont, "Noto Sans TC", sans-serif; color: #fff; touch-action: none; user-select: none; }
