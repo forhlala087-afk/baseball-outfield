@@ -115,7 +115,7 @@
 
   #ticker {
     position: fixed; top: calc(max(10px, env(safe-area-inset-top)) + 166px); left: 50%; transform: translateX(-50%);
-    background: rgba(10, 18, 30, 0.8); border: 1px solid rgba(255,255,255,0.18);
+    background: rgba(10, 18, 30, 0.82); border: 1px solid rgba(255,255,255,0.18);
     border-radius: 99px; padding: 5px 14px; font-size: 13px; font-weight: 700; color: #fff;
     z-index: 12; pointer-events: none; display: none; max-width: 92vw; text-align: center;
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
@@ -467,24 +467,26 @@ BASES.forEach(p => {
   scene.add(b);
 });
 
+const ONDECK_POS = new THREE.Vector3(-16.5, 1.65, 2.0);
+const DUGOUT_POS = new THREE.Vector3(-27.5, 1.45, 9.5);
+
 const onDeckCircle = new THREE.Mesh(
-  new THREE.RingGeometry(0.9, 1.35, 24),
+  new THREE.RingGeometry(0.95, 1.45, 24),
   new THREE.MeshBasicMaterial({ color: 0x1565c0, side: THREE.DoubleSide })
 );
 onDeckCircle.rotation.x = -Math.PI / 2;
-onDeckCircle.position.set(-7.5, 0.06, 5.5);
+onDeckCircle.position.set(ONDECK_POS.x, 0.06, ONDECK_POS.z);
 scene.add(onDeckCircle);
 
 const dugoutGroup = new THREE.Group();
-const dgMat = new THREE.MeshLambertMaterial({ color: 0x263238 });
-const dgRoof = new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.25, 14), dgMat);
-dgRoof.position.set(-16.2, 2.55, 11);
+const dgRoof = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.25, 15), new THREE.MeshLambertMaterial({ color: 0x263238 }));
+dgRoof.position.set(-28.0, 2.65, 9.2);
 dgRoof.rotation.y = Math.PI / 4;
-const dgRail = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.08, 13.5), new THREE.MeshLambertMaterial({ color: 0x90a4ae }));
-dgRail.position.set(-15.0, 1.05, 10.2);
+const dgRail = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.08, 14.5), new THREE.MeshLambertMaterial({ color: 0x90a4ae }));
+dgRail.position.set(-26.3, 1.05, 8.2);
 dgRail.rotation.y = Math.PI / 4;
-const dgWall = new THREE.Mesh(new THREE.BoxGeometry(0.25, 0.9, 13.5), new THREE.MeshLambertMaterial({ color: 0x37474f }));
-dgWall.position.set(-15.1, 0.45, 10.2);
+const dgWall = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.9, 14.5), new THREE.MeshLambertMaterial({ color: 0x37474f }));
+dgWall.position.set(-26.4, 0.45, 8.2);
 dgWall.rotation.y = Math.PI / 4;
 dugoutGroup.add(dgRoof, dgRail, dgWall);
 scene.add(dugoutGroup);
@@ -510,9 +512,9 @@ function createPlayerSilhouette(x, z, shirtColor) {
   scene.add(g);
   return g;
 }
-const pitcherMesh = createPlayerSilhouette(0, 18.44, 0x1565c0);
+createPlayerSilhouette(0, 18.44, 0x1565c0);
 const batterMesh = createPlayerSilhouette(0.9, 0.2, 0xc62828);
-const catcherMesh = createPlayerSilhouette(0, -1.6, 0x1565c0);
+createPlayerSilhouette(0, -1.6, 0x1565c0);
 createPlayerSilhouette(-18, 28, 0x1565c0);
 createPlayerSilhouette(18, 28, 0x1565c0);
 createPlayerSilhouette(-38, 82, 0x1565c0);
@@ -588,9 +590,14 @@ const trailLine = new THREE.Line(trailGeo, new THREE.LineBasicMaterial({ color: 
 scene.add(trailLine);
 
 const START_POS = new THREE.Vector3(0, 1.7, 92);
-const DUGOUT_POS = new THREE.Vector3(-16.0, 1.45, 11.2);
-const ONDECK_POS = new THREE.Vector3(-7.5, 1.65, 5.5);
 const BATTER_POS = new THREE.Vector3(0.68, 1.48, -0.45);
+
+const PITCH_TYPES = [
+  { name: '直球', minKmh: 145, maxKmh: 153, dur: 0.47, breakX: 0.0, breakY: 0.05, arc: 0.16 },
+  { name: '滑球', minKmh: 131, maxKmh: 139, dur: 0.56, breakX: 0.36, breakY: -0.22, arc: 0.24 },
+  { name: '變速球', minKmh: 124, maxKmh: 132, dur: 0.62, breakX: -0.20, breakY: -0.34, arc: 0.28 },
+  { name: '曲球', minKmh: 113, maxKmh: 122, dur: 0.71, breakX: 0.24, breakY: -0.56, arc: 0.62 }
+];
 
 const player = {
   pos: START_POS.clone(),
@@ -628,15 +635,14 @@ const game = {
   timer: 0,
   pitchDur: 0.56,
   pitchTarget: new THREE.Vector3(0, 0.9, 0.2),
+  pitchType: PITCH_TYPES[0],
+  pitchKmh: 148,
   pitchIsStrike: true,
   pitchSwung: false,
   simResult: null,
   runProgress: 0,
   runTargetBase: 0,
-  runHolding: false,
-  runBallInPlay: false,
   runSafeTimeout: 0,
-  stealAttempt: false,
   stats: { ab: 0, h: 0, hr: 0, bb: 0, rbi: 0, po: 0 }
 };
 
@@ -902,13 +908,13 @@ function addOut(msg) {
 
     if (game.half === 'bottom' && game.inning >= 9) {
       endFullGame();
-      return;
+      return true;
     }
     if (game.half === 'top') {
       game.half = 'bottom';
       if (game.inning === 9 && game.homeScore > game.awayScore) {
         endFullGame();
-        return;
+        return true;
       }
       setBanner(`${game.inning}局下半`, '三出局攻守交換｜換我方進攻！');
     } else {
@@ -1009,11 +1015,11 @@ function enterCurrentRole() {
       btnSwing.style.display = 'block';
       game.subPhase = 'BAT_WAIT';
       game.timer = 1.25;
-      setTicker('輪到你了（第 3 棒）！盯緊投手準備揮棒');
+      setTicker('輪到你了（第 3 棒）！盯緊投手球路準備揮棒');
     } else {
       const isOnDeck = game.homeOrder === 2;
       camera.position.copy(isOnDeck ? ONDECK_POS : DUGOUT_POS);
-      lookTarget.set(0, 1.5, 10);
+      lookTarget.set(0, 1.5, 13);
       camera.lookAt(lookTarget);
       game.subPhase = 'OFF_SIM_WAIT';
       game.timer = 1.35 / state.speed;
@@ -1022,28 +1028,42 @@ function enterCurrentRole() {
   }
 }
 
+function pickPitchType() {
+  const pt = PITCH_TYPES[Math.floor(Math.random() * PITCH_TYPES.length)];
+  const kmh = Math.round(pt.minKmh + Math.random() * (pt.maxKmh - pt.minKmh));
+  return { pt, kmh };
+}
+
 function launchSimPitch(isDefense) {
   game.subPhase = isDefense ? 'DEF_PITCH' : 'OFF_SIM_PITCH';
   state.pitchT = 0;
+  const picked = pickPitchType();
+  game.pitchType = picked.pt;
+  game.pitchKmh = picked.kmh;
   ballMesh.visible = true;
   ballMesh.position.set(0, 1.85, 18.44);
+
   const r = Math.random();
-  if (r < 0.25) game.simResult = 'BALL';
-  else if (r < 0.44) game.simResult = 'STRIKE_LOOK';
-  else if (r < 0.56) game.simResult = 'STRIKE_SWING';
-  else if (r < 0.69) game.simResult = 'FOUL';
+  if (r < 0.24) game.simResult = 'BALL';
+  else if (r < 0.42) game.simResult = 'STRIKE_LOOK';
+  else if (r < 0.54) game.simResult = 'STRIKE_SWING';
+  else if (r < 0.63) game.simResult = 'FOUL_FLY';
+  else if (r < 0.70) game.simResult = 'FOUL_GROUND';
   else {
     const b = Math.random();
     if (isDefense) {
-      if (b < 0.36) game.simResult = 'CF_BALL';
-      else if (b < 0.66) game.simResult = 'INFIELD_OUT';
-      else if (b < 0.84) game.simResult = 'CORNER_OUT';
-      else if (b < 0.96) game.simResult = 'CORNER_HIT';
+      if (b < 0.26) game.simResult = 'CF_BALL';
+      else if (b < 0.50) game.simResult = 'INFIELD_OUT';
+      else if (b < 0.70) game.simResult = 'CORNER_OUT';
+      else if (b < 0.82) game.simResult = 'AWAY_GROUND_HIT';
+      else if (b < 0.95) game.simResult = 'CORNER_HIT';
       else game.simResult = 'AWAY_HR';
     } else {
-      if (b < 0.46) game.simResult = 'TEAM_OUT';
-      else if (b < 0.74) game.simResult = 'TEAM_1B';
-      else if (b < 0.90) game.simResult = 'TEAM_2B';
+      if (b < 0.36) game.simResult = 'TEAM_GROUND_OUT';
+      else if (b < 0.68) game.simResult = 'TEAM_FLY_OUT';
+      else if (b < 0.80) game.simResult = 'TEAM_GROUND_HIT';
+      else if (b < 0.89) game.simResult = 'TEAM_1B';
+      else if (b < 0.95) game.simResult = 'TEAM_2B';
       else game.simResult = 'TEAM_HR';
     }
   }
@@ -1051,14 +1071,16 @@ function launchSimPitch(isDefense) {
 
 function resolveSimPitch(isDefense) {
   const res = game.simResult;
+  const pInfo = `${game.pitchType.name} ${game.pitchKmh}km/h｜`;
+
   if (res === 'BALL') {
     AudioFX.glovePop();
     game.balls++;
     if (game.balls >= 4) {
-      setTicker('四壞球保送！打者上一壘');
+      setTicker(`${pInfo}四壞球保送！打者上一壘`);
       advanceRunners(1, true, false);
       nextBatter();
-    } else setTicker(`壞球！（${game.balls} 壞 ${game.strikes} 好）`);
+    } else setTicker(`${pInfo}壞球（${game.balls}壞${game.strikes}好）`);
     enterAfterPause(1.0);
   } else if (res === 'STRIKE_LOOK' || res === 'STRIKE_SWING') {
     AudioFX.glovePop();
@@ -1066,21 +1088,22 @@ function resolveSimPitch(isDefense) {
     const label = res === 'STRIKE_LOOK' ? '好球進壘' : '揮棒落空';
     if (game.strikes >= 3) {
       AudioFX.tone(320, 0.2);
-      if (!addOut(`${label}！三振出局！`)) {
+      if (!addOut(`${pInfo}${label}！三振出局！`)) {
         nextBatter();
         enterAfterPause(1.1);
       }
     } else {
-      setTicker(`${label}！（${game.balls} 壞 ${game.strikes} 好）`);
+      setTicker(`${pInfo}${label}（${game.balls}壞${game.strikes}好）`);
       enterAfterPause(0.95);
     }
-  } else if (res === 'FOUL') {
+  } else if (res === 'FOUL_FLY' || res === 'FOUL_GROUND') {
     AudioFX.crack(0.7);
     if (game.strikes < 2) game.strikes++;
-    setTicker(`界外球！（${game.balls} 壞 ${game.strikes} 好）`);
-    launchVisualBall(32, 34, (Math.random() > 0.5 ? 1 : -1) * (58 + Math.random() * 20), 0.7);
+    const isGr = res === 'FOUL_GROUND';
+    setTicker(`${pInfo}${isGr ? '滾地界外' : '界外飛球'}（${game.balls}壞${game.strikes}好）`);
+    launchVisualBall(isGr ? 30 : 32, isGr ? 4 : 34, (Math.random() > 0.5 ? 1 : -1) * (54 + Math.random() * 18), 0.5);
     game.subPhase = 'WATCH_BALL';
-    game.timer = 1.4 / state.speed;
+    game.timer = 1.35 / state.speed;
   } else if (res === 'CF_BALL') {
     state.meta = generatePlayableBall(false);
     const m = state.meta;
@@ -1094,40 +1117,45 @@ function resolveSimPitch(isDefense) {
     setBanner('中外野飛球！', '跑位接殺！');
     setTimeout(() => { if (game.subPhase === 'DEF_CF_PLAY') setBanner('', ''); }, 900);
     game.subPhase = 'DEF_CF_PLAY';
-  } else if (res === 'INFIELD_OUT' || res === 'CORNER_OUT' || res === 'TEAM_OUT') {
+  } else if (res === 'INFIELD_OUT' || res === 'CORNER_OUT' || res === 'TEAM_GROUND_OUT' || res === 'TEAM_FLY_OUT') {
     AudioFX.crack(0.8);
-    const isGround = Math.random() < 0.55;
-    const spray = res === 'CORNER_OUT' ? (Math.random() > 0.5 ? 28 : -28) : (Math.random() * 50 - 25);
-    launchVisualBall(isGround ? 28 : 37, isGround ? 8 : 35, spray, 0.9);
-    const desc = isGround ? '滾地球刺殺出局！' : '高飛球接殺出局！';
+    const isGround = res === 'INFIELD_OUT' || res === 'TEAM_GROUND_OUT';
+    const spray = res === 'CORNER_OUT' ? (Math.random() > 0.5 ? 28 : -28) : (Math.random() * 52 - 26);
+    launchVisualBall(isGround ? 28 : 37, isGround ? 4 : 35, spray, 0.8);
+    const desc = isGround ? '滾地球遭到內野刺殺出局！' : '外野高飛球遭到接殺出局！';
     if (!addOut(desc)) {
       nextBatter();
       game.subPhase = 'WATCH_BALL';
-      game.timer = 1.7 / state.speed;
+      game.timer = 1.65 / state.speed;
     }
-  } else if (res === 'CORNER_HIT' || res === 'AWAY_HR') {
-    AudioFX.crack(1.15);
+  } else if (res === 'AWAY_GROUND_HIT' || res === 'CORNER_HIT' || res === 'AWAY_HR') {
+    AudioFX.crack(1.1);
     const isHR = res === 'AWAY_HR';
-    launchVisualBall(isHR ? 49 : 41, isHR ? 30 : 14, (Math.random() > 0.5 ? 1 : -1) * (24 + Math.random() * 14), 1.1);
-    const nb = isHR ? 4 : (Math.random() < 0.7 ? 1 : 2);
+    const isGr = res === 'AWAY_GROUND_HIT';
+    const spray = isGr ? (Math.random() * 44 - 22) : (Math.random() > 0.5 ? 1 : -1) * (24 + Math.random() * 14);
+    launchVisualBall(isHR ? 49 : (isGr ? 37 : 41), isHR ? 30 : (isGr ? 3 : 14), spray, 0.9);
+    const nb = isHR ? 4 : (isGr ? 1 : (Math.random() < 0.65 ? 1 : 2));
     const sc = advanceRunners(nb, false, false);
-    setTicker(`${isHR ? '客隊全壘打！' : (nb === 2 ? '客隊二壘安打！' : '客隊安打！')}${sc > 0 ? ` 失 ${sc} 分` : ''}`);
+    const hitLabel = isHR ? '客隊全壘打！' : (isGr ? '客隊滾地穿越安打！' : (nb === 2 ? '客隊二壘安打！' : '客隊安打！'));
+    setTicker(`${hitLabel}${sc > 0 ? ` 失 ${sc} 分` : ''}`);
     nextBatter();
     game.subPhase = 'WATCH_BALL';
-    game.timer = 2.0 / state.speed;
-  } else if (res === 'TEAM_1B' || res === 'TEAM_2B' || res === 'TEAM_HR') {
-    AudioFX.crack(1.15);
+    game.timer = 1.95 / state.speed;
+  } else if (res === 'TEAM_GROUND_HIT' || res === 'TEAM_1B' || res === 'TEAM_2B' || res === 'TEAM_HR') {
+    AudioFX.crack(1.1);
+    const isGr = res === 'TEAM_GROUND_HIT';
     const nb = res === 'TEAM_HR' ? 4 : (res === 'TEAM_2B' ? 2 : 1);
-    launchVisualBall(nb === 4 ? 50 : 42, nb === 4 ? 30 : 16, Math.random() * 44 - 22, 1.1);
+    launchVisualBall(nb === 4 ? 50 : (isGr ? 37 : 42), nb === 4 ? 30 : (isGr ? 3 : 16), Math.random() * 44 - 22, 0.9);
     if (game.playerBase > 0 && nb < 4) {
-      startInteractiveBaserunning(nb);
+      startInteractiveBaserunning(nb, isGr);
     } else {
       const sc = advanceRunners(nb, false, false);
       if (nb === 4) AudioFX.cheer();
-      setTicker(`隊友擊出${nb === 4 ? '全壘打！' : (nb === 2 ? '二壘安打！' : '安打！')}${sc > 0 ? ` 得 ${sc} 分！` : ''}`);
+      const hitLabel = nb === 4 ? '全壘打！' : (isGr ? '滾地穿越安打！' : (nb === 2 ? '二壘安打！' : '外野安打！'));
+      setTicker(`隊友擊出${hitLabel}${sc > 0 ? ` 得 ${sc} 分！` : ''}`);
       nextBatter();
       game.subPhase = 'WATCH_BALL';
-      game.timer = 2.0 / state.speed;
+      game.timer = 1.95 / state.speed;
     }
   }
   updateGameUI();
@@ -1153,8 +1181,12 @@ function launchPlayerAtBatPitch() {
   game.subPhase = 'BAT_PITCH';
   game.pitchSwung = false;
   state.pitchT = 0;
-  game.pitchDur = 0.54 + Math.random() * 0.16;
-  const isStrike = Math.random() < 0.62;
+  const picked = pickPitchType();
+  game.pitchType = picked.pt;
+  game.pitchKmh = picked.kmh;
+  game.pitchDur = picked.pt.dur + (Math.random() * 0.04 - 0.02);
+
+  const isStrike = Math.random() < 0.60;
   game.pitchIsStrike = isStrike;
   if (isStrike) {
     game.pitchTarget.set((Math.random() - 0.5) * 0.44, 0.62 + Math.random() * 0.56, 0.22);
@@ -1172,55 +1204,66 @@ function swingBat() {
   game.pitchSwung = true;
   const z = ballMesh.position.z;
   const err = Math.abs(z - 0.9);
-  const zonePenalty = game.pitchIsStrike ? 0 : 0.7;
+  const zonePenalty = game.pitchIsStrike ? 0 : 0.72;
+  const pInfo = `${game.pitchType.name} ${game.pitchKmh}km/h｜`;
 
-  if (err + zonePenalty < 1.35) {
-    const quality = 1 - (err + zonePenalty) / 1.35;
+  if (err + zonePenalty < 1.38) {
+    const quality = 1 - (err + zonePenalty) / 1.38;
     AudioFX.crack(0.85 + quality * 0.45);
-    const ev = 36 + quality * 15;
-    const la = 10 + Math.random() * 24 + quality * 6;
-    const spray = (z - 0.9) * 14 + (Math.random() * 14 - 7);
-    const sim = simulateHit(ev, la, spray, 1.1);
+    const ev = 35 + quality * 15.5;
+    const la = 2 + Math.random() * 28 + quality * 5;
+    const spray = (z - 0.9) * 14 + (Math.random() * 18 - 9);
+    const sim = simulateHit(ev, la, spray, 1.0);
     const dist = Math.hypot(sim.land.x, sim.land.z);
-    launchVisualBall(ev, la, spray, 1.1);
+    launchVisualBall(ev, la, spray, 1.0);
     strikeZoneMesh.visible = false;
     btnSwing.style.display = 'none';
     game.stats.ab++;
 
-    if (dist >= 122 && Math.abs(spray) < 42) {
+    if (Math.abs(spray) > 45) {
+      game.stats.ab--;
+      if (game.strikes < 2) game.strikes++;
+      setTicker(`${pInfo}${la < 10 ? '滾地界外' : '界外球'}（${game.balls}壞${game.strikes}好）`);
+    } else if (dist >= 122) {
       AudioFX.cheer();
       game.stats.h++; game.stats.hr++;
       const sc = advanceRunners(4, false, true);
       setBanner('HOME RUN!!', `特大號全壘打！飛行距離 ${dist.toFixed(0)} 公尺（+${sc} 分）`);
-      setTicker(`你轟出全壘打！一口氣攻下 ${sc} 分！`);
+      setTicker(`${pInfo}你轟出全壘打！攻下 ${sc} 分！`);
       nextBatter();
-    } else if (Math.abs(spray) > 45) {
-      game.stats.ab--;
-      if (game.strikes < 2) game.strikes++;
-      setTicker(`界外球！（${game.balls} 壞 ${game.strikes} 好）`);
-    } else if (la > 26 && dist < 102 && Math.random() < 0.62) {
-      if (!addOut('外野高飛球遭到接殺！')) nextBatter();
-    } else if (la < 14 && dist < 42 && Math.random() < 0.55) {
-      if (!addOut('內野滾地球遭到刺殺！')) nextBatter();
+    } else if (la < 11) {
+      const through = quality > 0.56 || Math.random() < 0.34;
+      if (through) {
+        AudioFX.cheer();
+        game.stats.h++;
+        const sc = advanceRunners(1, false, true);
+        setBanner('滾地穿越安打！', sc > 0 ? `帶有 ${sc} 分打點！` : '強勁滾地穿出內野上壘！');
+        setTicker(`${pInfo}你擊出滾地穿越安打！${sc > 0 ? ` 貢獻 ${sc} 分打點！` : ''}`);
+        nextBatter();
+      } else {
+        if (!addOut(`${pInfo}內野滾地球遭到刺殺出局！`)) nextBatter();
+      }
+    } else if (la > 25 && dist < 104 && Math.random() < 0.64) {
+      if (!addOut(`${pInfo}外野高飛球遭到接殺出局！`)) nextBatter();
     } else {
       AudioFX.cheer();
       game.stats.h++;
       const nb = dist > 105 ? 3 : (dist > 82 ? 2 : 1);
       const sc = advanceRunners(nb, false, true);
-      const label = nb === 3 ? '三壘安打！' : (nb === 2 ? '二壘安打！' : '一壘安打！');
+      const label = nb === 3 ? '三壘安打！' : (nb === 2 ? '二壘安打！' : '外野安打！');
       setBanner(label, sc > 0 ? `帶有 ${sc} 分打點！上壘準備跑壘` : '漂亮安打上壘！');
-      setTicker(`你擊出${label}${sc > 0 ? ` 貢獻 ${sc} 分打點！` : ''}`);
+      setTicker(`${pInfo}你擊出${label}${sc > 0 ? ` 貢獻 ${sc} 分打點！` : ''}`);
       nextBatter();
     }
     if (game.subPhase !== 'CHANGE_SIDES' && game.subPhase !== 'OVER') {
       game.subPhase = 'WATCH_BALL';
-      game.timer = 2.1;
+      game.timer = 2.05;
     }
     updateGameUI();
   } else if (err < 2.6) {
     AudioFX.crack(0.6);
     if (game.strikes < 2) game.strikes++;
-    setTicker(`擦棒界外！（${game.balls} 壞 ${game.strikes} 好）`);
+    setTicker(`${pInfo}擦棒界外（${game.balls}壞${game.strikes}好）`);
     launchVisualBall(25, 42, Math.random() > 0.5 ? 65 : -65, 0.5);
     game.subPhase = 'WATCH_BALL';
     game.timer = 1.2;
@@ -1230,12 +1273,12 @@ function swingBat() {
     game.strikes++;
     if (game.strikes >= 3) {
       game.stats.ab++;
-      if (!addOut('揮棒落空！三振出局！')) {
+      if (!addOut(`${pInfo}揮棒落空！三振出局！`)) {
         nextBatter();
         enterAfterPause(1.2);
       }
     } else {
-      setTicker(`揮棒落空！（${game.balls} 壞 ${game.strikes} 好）`);
+      setTicker(`${pInfo}揮棒落空（${game.balls}壞${game.strikes}好）`);
       enterAfterPause(1.0);
     }
     updateGameUI();
@@ -1246,7 +1289,6 @@ function attemptSteal() {
   if (game.subPhase !== 'OFF_SIM_WAIT' && game.subPhase !== 'OFF_SIM_PITCH') return;
   if (game.playerBase <= 0 || game.playerBase >= 3 || game.bases[game.playerBase]) return;
   btnSteal.style.display = 'none';
-  game.stealAttempt = true;
   game.runProgress = 0;
   game.runTargetBase = game.playerBase + 1;
   game.subPhase = 'BASE_STEAL';
@@ -1254,7 +1296,7 @@ function attemptSteal() {
   AudioFX.tone(540, 0.1);
 }
 
-function startInteractiveBaserunning(hitBases) {
+function startInteractiveBaserunning(hitBases, isGround = false) {
   game.subPhase = 'BASE_RUN';
   game.runProgress = 0;
   game.runTargetBase = game.playerBase + 1;
@@ -1262,8 +1304,9 @@ function startInteractiveBaserunning(hitBases) {
   holdRun = false;
   btnSteal.style.display = 'none';
   btnRun.style.display = 'block';
+  const label = isGround ? '滾地穿越安打' : (hitBases === 2 ? '二壘安打' : '外野安打');
   setBanner('隊友安打！', '按住「衝刺 / Space」往下一壘衝！');
-  setTicker(`隊友擊出${hitBases === 2 ? '二壘' : '一壘'}安打！按住衝刺跑壘！`);
+  setTicker(`隊友擊出${label}！按住衝刺跑壘！`);
 }
 
 function updateBaserunning(dt) {
@@ -1548,8 +1591,13 @@ function animate(now) {
     } else if (game.subPhase === 'DEF_PITCH' || game.subPhase === 'OFF_SIM_PITCH') {
       if (game.subPhase === 'DEF_PITCH') updateCFMovement(dt, now);
       state.pitchT += dt * state.speed;
-      const p = Math.min(state.pitchT / 0.48, 1);
-      ballMesh.position.set(0, 1.85 - p * 0.8, 18.44 * (1 - p) + 0.3);
+      const p = Math.min(state.pitchT / game.pitchType.dur, 1);
+      const pt = game.pitchType;
+      ballMesh.position.set(
+        pt.breakX * p * p,
+        1.85 - p * 0.8 + Math.sin(p * Math.PI) * pt.arc + pt.breakY * p * p * 0.5,
+        18.44 * (1 - p) + 0.3
+      );
       ballMesh.scale.setScalar(game.subPhase === 'DEF_PITCH' ? 2.4 : 1.3);
       lookTarget.lerp(ballMesh.position, 0.2);
       camera.lookAt(lookTarget);
@@ -1599,18 +1647,22 @@ function animate(now) {
       state.pitchT += dt;
       const p = Math.min(state.pitchT / game.pitchDur, 1);
       const t = game.pitchTarget;
-      const arcY = Math.sin(p * Math.PI) * 0.25;
-      ballMesh.position.set(t.x * p, 1.85 + (t.y - 1.85) * p + arcY, 18.44 * (1 - p) + t.z * p);
+      const pt = game.pitchType;
+      const bx = (t.x - pt.breakX) * p + pt.breakX * p * p;
+      const by = 1.85 + (t.y - 1.85 - pt.breakY) * p + pt.breakY * p * p + Math.sin(p * Math.PI) * pt.arc;
+      const bz = 18.44 * (1 - p) + t.z * p;
+      ballMesh.position.set(bx, by, bz);
       ballMesh.scale.setScalar(1.15);
       if (p >= 1) {
         if (!game.pitchSwung) {
           AudioFX.glovePop();
+          const pInfo = `${pt.name} ${game.pitchKmh}km/h｜`;
           if (game.pitchIsStrike) {
             game.strikes++;
             if (game.strikes >= 3) {
               game.stats.ab++;
-              if (!addOut('好球沒揮棒！遭到三振出局！')) { nextBatter(); enterAfterPause(1.2); }
-            } else { setTicker(`好球進壘！（${game.balls} 壞 ${game.strikes} 好）`); enterAfterPause(0.95); }
+              if (!addOut(`${pInfo}好球沒揮棒！遭到三振出局！`)) { nextBatter(); enterAfterPause(1.2); }
+            } else { setTicker(`${pInfo}好球進壘（${game.balls}壞${game.strikes}好）`); enterAfterPause(0.95); }
           } else {
             game.balls++;
             if (game.balls >= 4) {
@@ -1618,18 +1670,29 @@ function animate(now) {
               game.stats.bb++;
               advanceRunners(1, true, true);
               setBanner('BALL FOUR!', '選到四壞球保送上一壘！');
-              setTicker('選球漂亮！四壞球保送上一壘');
+              setTicker(`${pInfo}選球漂亮！四壞球保送上一壘`);
               nextBatter();
               enterAfterPause(1.4);
-            } else { setTicker(`壞球！選得好（${game.balls} 壞 ${game.strikes} 好）`); enterAfterPause(0.95); }
+            } else { setTicker(`${pInfo}壞球！選得好（${game.balls}壞${game.strikes}好）`); enterAfterPause(0.95); }
           }
           updateGameUI();
         }
       }
     } else if (game.subPhase === 'WATCH_BALL') {
-      if (state.ballPos.y > 0.12) {
+      if (state.ballVel.lengthSq() > 0.2) {
         stepPhysics(state.ballPos, state.ballVel, state.meta ? state.meta.spin : 0.8, dt);
-        if (state.ballPos.y < 0.11) state.ballPos.y = 0.11;
+        if (state.ballPos.y <= 0.11) {
+          state.ballPos.y = 0.11;
+          if (Math.abs(state.ballVel.y) > 1.2) {
+            state.ballVel.y = Math.abs(state.ballVel.y) * 0.42;
+            state.ballVel.x *= 0.85;
+            state.ballVel.z *= 0.85;
+          } else {
+            state.ballVel.y = 0;
+            state.ballVel.x *= 0.96;
+            state.ballVel.z *= 0.96;
+          }
+        }
         ballMesh.position.copy(state.ballPos);
         ballMesh.scale.setScalar(THREE.MathUtils.clamp(camera.position.distanceTo(state.ballPos) * 0.024, 1.0, 2.5));
         ballShadow.position.set(state.ballPos.x, 0.07, state.ballPos.z);
