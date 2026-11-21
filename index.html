@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<title>外野飛球 3D</title>
+<title>外野飛球 3D｜3棒中外野手</title>
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -21,16 +21,13 @@
     g.textBaseline = 'middle';
     g.fillText('⚾', 256, 276);
     const icon = c.toDataURL('image/png');
-
     const addLink = (rel, href) => {
       const l = document.createElement('link');
-      l.rel = rel;
-      l.href = href;
+      l.rel = rel; l.href = href;
       document.head.appendChild(l);
     };
     addLink('icon', icon);
     addLink('apple-touch-icon', icon);
-
     const manifest = {
       name: '外野飛球 3D',
       short_name: '外野飛球',
@@ -50,58 +47,105 @@
   canvas { display: block; width: 100%; height: 100%; }
 
   #hud-top {
-    position: fixed; top: 12px; left: 12px; right: 12px;
-    display: flex; justify-content: space-between; align-items: flex-start; gap: 8px;
-    pointer-events: none; z-index: 10;
+    position: fixed; top: max(10px, env(safe-area-inset-top)); left: 10px; right: 10px;
+    display: flex; justify-content: space-between; align-items: flex-start; gap: 6px;
+    pointer-events: none; z-index: 12; flex-wrap: wrap;
   }
   .panel {
-    background: rgba(10, 18, 30, 0.72); backdrop-filter: blur(8px);
-    border: 1px solid rgba(255,255,255,0.14); border-radius: 12px;
-    padding: 8px 12px; pointer-events: auto;
+    background: rgba(10, 18, 30, 0.78); backdrop-filter: blur(8px);
+    border: 1px solid rgba(255,255,255,0.16); border-radius: 12px;
+    padding: 6px 10px; pointer-events: auto;
   }
-  .mode-tabs { display: flex; gap: 6px; }
+  .mode-tabs { display: flex; gap: 5px; flex-wrap: wrap; }
   .btn {
     background: rgba(255,255,255,0.12); color: #fff; border: 1px solid rgba(255,255,255,0.18);
-    border-radius: 8px; padding: 6px 11px; font-size: 13px; font-weight: 600; cursor: pointer;
+    border-radius: 8px; padding: 5px 9px; font-size: 12px; font-weight: 700; cursor: pointer;
     transition: background 0.15s, transform 0.1s;
   }
-  .btn:active { transform: scale(0.96); }
+  .btn:active { transform: scale(0.95); }
   .btn.active { background: #1e88e5; border-color: #64b5f6; }
-  .btn.primary { background: #2e7d32; border-color: #66bb6a; font-size: 15px; padding: 10px 22px; }
+  .btn.primary { background: #2e7d32; border-color: #66bb6a; font-size: 15px; padding: 11px 24px; }
 
-  .score-box { display: flex; gap: 14px; font-size: 13px; align-items: center; }
+  .score-box { display: flex; gap: 12px; font-size: 12px; align-items: center; }
   .score-item span { display: block; font-size: 10px; color: #9fb3c8; }
-  .score-item strong { font-size: 17px; color: #ffca28; }
+  .score-item strong { font-size: 16px; color: #ffca28; }
+
+  #game-bug {
+    position: fixed; top: calc(max(10px, env(safe-area-inset-top)) + 44px); left: 10px;
+    background: rgba(9, 16, 28, 0.86); backdrop-filter: blur(10px);
+    border: 1px solid rgba(255,255,255,0.2); border-radius: 12px;
+    padding: 8px 10px; z-index: 12; display: none; min-width: 228px;
+    box-shadow: 0 6px 18px rgba(0,0,0,0.4);
+  }
+  .bug-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .teams { font-size: 13px; font-weight: 800; line-height: 1.35; }
+  .teams .me { color: #ffca28; }
+  .inning-box { text-align: center; padding: 2px 7px; background: rgba(255,255,255,0.08); border-radius: 8px; }
+  .inning-box b { font-size: 15px; color: #81d4fa; display: block; }
+  .inning-box span { font-size: 10px; color: #b0bec5; }
+
+  .diamond-wrap { position: relative; width: 42px; height: 34px; }
+  .base-sq {
+    position: absolute; width: 11px; height: 11px; border: 1.5px solid #90a4ae;
+    transform: rotate(45deg); background: rgba(255,255,255,0.08);
+  }
+  .base-sq.on { background: #ffca28; border-color: #fff; box-shadow: 0 0 6px #ffca28; }
+  .base-sq.me { background: #29b6f6; border-color: #fff; box-shadow: 0 0 8px #29b6f6; }
+  #b1 { right: 4px; top: 14px; }
+  #b2 { left: 15px; top: 3px; }
+  #b3 { left: 4px; top: 14px; }
+
+  .bso-row { display: flex; gap: 10px; margin-top: 6px; padding-top: 6px; border-top: 1px solid rgba(255,255,255,0.1); font-size: 11px; align-items: center; }
+  .bso-group { display: flex; align-items: center; gap: 3px; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: rgba(255,255,255,0.16); }
+  .dot.b { background: #4caf50; box-shadow: 0 0 5px #4caf50; }
+  .dot.s { background: #ffca28; box-shadow: 0 0 5px #ffca28; }
+  .dot.o { background: #ef5350; box-shadow: 0 0 5px #ef5350; }
+
+  .role-bar {
+    margin-top: 6px; display: flex; justify-content: space-between; align-items: center;
+    font-size: 11px; color: #cfd8dc; gap: 6px;
+  }
+  .role-badge {
+    background: #1565c0; color: #fff; padding: 2px 7px; border-radius: 99px; font-weight: 700; font-size: 11px;
+  }
+  .role-badge.bat { background: #c62828; }
+  .role-badge.run { background: #ef6c00; }
+  .role-badge.dug { background: #455a64; }
+
+  #ticker {
+    position: fixed; top: calc(max(10px, env(safe-area-inset-top)) + 166px); left: 50%; transform: translateX(-50%);
+    background: rgba(10, 18, 30, 0.8); border: 1px solid rgba(255,255,255,0.18);
+    border-radius: 99px; padding: 5px 14px; font-size: 13px; font-weight: 700; color: #fff;
+    z-index: 12; pointer-events: none; display: none; max-width: 92vw; text-align: center;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
 
   #center-banner {
-    position: fixed; top: 22%; left: 50%; transform: translateX(-50%);
-    text-align: center; pointer-events: none; z-index: 12; width: min(92vw, 420px);
+    position: fixed; top: 32%; left: 50%; transform: translateX(-50%);
+    text-align: center; pointer-events: none; z-index: 14; width: min(92vw, 440px);
   }
   .big-title {
-    font-size: clamp(26px, 6vw, 40px); font-weight: 900; letter-spacing: 1px;
-    text-shadow: 0 3px 14px rgba(0,0,0,0.85); color: #ffeb3b;
+    font-size: clamp(24px, 6vw, 40px); font-weight: 900; letter-spacing: 1px;
+    text-shadow: 0 3px 14px rgba(0,0,0,0.9); color: #ffeb3b;
   }
   .sub-hint {
-    margin-top: 6px; font-size: 14px; color: #e3f2fd;
-    text-shadow: 0 2px 8px rgba(0,0,0,0.9);
+    margin-top: 6px; font-size: 14px; color: #e3f2fd; font-weight: 600;
+    text-shadow: 0 2px 8px rgba(0,0,0,0.95);
   }
 
   #result-card {
     position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%);
-    width: min(92vw, 370px); background: rgba(11, 20, 34, 0.9); backdrop-filter: blur(12px);
+    width: min(92vw, 370px); background: rgba(11, 20, 34, 0.92); backdrop-filter: blur(12px);
     border: 1px solid rgba(255,255,255,0.2); border-radius: 16px; padding: 18px;
-    text-align: center; z-index: 20; display: none; box-shadow: 0 12px 36px rgba(0,0,0,0.55);
+    text-align: center; z-index: 22; display: none; box-shadow: 0 12px 36px rgba(0,0,0,0.55);
   }
-  #result-title { font-size: 26px; font-weight: 900; margin-bottom: 4px; }
-  #result-sub { font-size: 14px; color: #b0bec5; margin-bottom: 14px; }
-  .stat-grid {
-    display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin-bottom: 16px;
-  }
-  .stat-cell {
-    background: rgba(255,255,255,0.06); border-radius: 10px; padding: 8px;
-  }
+  #result-title { font-size: 25px; font-weight: 900; margin-bottom: 4px; }
+  #result-sub { font-size: 13px; color: #b0bec5; margin-bottom: 14px; }
+  .stat-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin-bottom: 16px; }
+  .stat-cell { background: rgba(255,255,255,0.06); border-radius: 10px; padding: 8px; }
   .stat-cell label { display: block; font-size: 11px; color: #90a4ae; }
-  .stat-cell b { font-size: 16px; color: #fff; }
+  .stat-cell b { font-size: 15px; color: #fff; }
 
   #quiz-controls {
     position: fixed; bottom: 14%; left: 50%; transform: translateX(-50%);
@@ -109,19 +153,31 @@
   }
   .quiz-btn {
     flex: 1; padding: 16px 10px; border-radius: 14px; border: 2px solid rgba(255,255,255,0.3);
-    font-size: 20px; font-weight: 900; color: #fff; cursor: pointer;
+    font-size: 19px; font-weight: 900; color: #fff; cursor: pointer;
     box-shadow: 0 6px 20px rgba(0,0,0,0.45);
   }
   .quiz-btn.front { background: linear-gradient(135deg, #1976d2, #0d47a1); }
   .quiz-btn.back { background: linear-gradient(135deg, #d84315, #bf360c); }
 
-  #touch-controls {
-    position: fixed; inset: 0; pointer-events: none; z-index: 11;
+  #action-bar {
+    position: fixed; bottom: max(28px, env(safe-area-inset-bottom) + 16px); left: 50%; transform: translateX(-50%);
+    display: none; gap: 12px; z-index: 16; width: min(92vw, 380px); justify-content: center;
   }
+  .act-btn {
+    flex: 1; padding: 16px 14px; border-radius: 16px; border: 2px solid rgba(255,255,255,0.35);
+    font-size: 18px; font-weight: 900; color: #fff; cursor: pointer;
+    box-shadow: 0 6px 20px rgba(0,0,0,0.5); text-align: center;
+  }
+  .act-btn:active { transform: scale(0.95); }
+  .act-btn.swing { background: linear-gradient(135deg, #e53935, #b71c1c); }
+  .act-btn.run { background: linear-gradient(135deg, #fb8c00, #e65100); }
+  .act-btn.steal { background: linear-gradient(135deg, #00897b, #004d40); max-width: 150px; }
+
+  #touch-controls { position: fixed; inset: 0; pointer-events: none; z-index: 13; }
   #joy-zone {
-    position: absolute; left: 20px; bottom: 24px; width: 132px; height: 132px;
-    border-radius: 50%; background: rgba(255,255,255,0.08);
-    border: 2px solid rgba(255,255,255,0.22); pointer-events: auto;
+    position: absolute; left: 20px; bottom: max(26px, env(safe-area-inset-bottom) + 14px);
+    width: 130px; height: 130px; border-radius: 50%;
+    background: rgba(255,255,255,0.08); border: 2px solid rgba(255,255,255,0.22); pointer-events: auto;
   }
   #joy-knob {
     position: absolute; left: 50%; top: 50%; width: 52px; height: 52px;
@@ -129,25 +185,24 @@
     background: rgba(255,255,255,0.45); border: 2px solid #fff;
   }
   #dive-btn {
-    position: absolute; right: 24px; bottom: 42px; width: 84px; height: 84px;
-    border-radius: 50%; background: rgba(255, 152, 0, 0.78); border: 2px solid #ffe0b2;
+    position: absolute; right: 22px; bottom: max(42px, env(safe-area-inset-bottom) + 24px);
+    width: 82px; height: 82px; border-radius: 50%;
+    background: rgba(255, 152, 0, 0.8); border: 2px solid #ffe0b2;
     color: #fff; font-size: 16px; font-weight: 800; pointer-events: auto; cursor: pointer;
     box-shadow: 0 4px 16px rgba(0,0,0,0.4);
   }
   #dive-btn:active { transform: scale(0.92); background: #f57c00; }
 
-  #bottom-bar {
-    position: fixed; bottom: 10px; left: 50%; transform: translateX(-50%);
-    font-size: 12px; color: rgba(255,255,255,0.75); text-shadow: 0 1px 4px #000;
-    pointer-events: none; z-index: 10; white-space: nowrap;
-  }
-  #start-btn-wrap {
-    position: fixed; bottom: 22%; left: 50%; transform: translateX(-50%); z-index: 15;
-  }
+  #start-btn-wrap { position: fixed; bottom: 20%; left: 50%; transform: translateX(-50%); z-index: 16; }
   #minimap {
-    position: fixed; right: 12px; top: 68px; width: 92px; height: 92px;
-    background: rgba(10,18,30,0.68); border: 1px solid rgba(255,255,255,0.18);
-    border-radius: 12px; z-index: 10; pointer-events: none;
+    position: fixed; right: 10px; top: calc(max(10px, env(safe-area-inset-top)) + 44px);
+    width: 86px; height: 86px; background: rgba(10,18,30,0.72);
+    border: 1px solid rgba(255,255,255,0.18); border-radius: 12px; z-index: 12; pointer-events: none;
+  }
+  #bottom-bar {
+    position: fixed; bottom: 6px; left: 50%; transform: translateX(-50%);
+    font-size: 11px; color: rgba(255,255,255,0.68); text-shadow: 0 1px 4px #000;
+    pointer-events: none; z-index: 10; white-space: nowrap;
   }
 </style>
 </head>
@@ -157,27 +212,57 @@
 <div id="hud-top">
   <div class="panel">
     <div class="mode-tabs">
-      <button class="btn active" id="mode-chase">實戰追接</button>
-      <button class="btn" id="mode-quiz">前？後？快問</button>
+      <button class="btn active" id="mode-game">比賽模式(3棒CF)</button>
+      <button class="btn" id="mode-chase">追接</button>
+      <button class="btn" id="mode-quiz">前？後？</button>
       <button class="btn" id="toggle-marker">落點：關</button>
+      <button class="btn" id="btn-speed">1x</button>
     </div>
   </div>
-  <div class="panel score-box">
+  <div class="panel score-box" id="practice-score" style="display:none;">
     <div class="score-item"><span>成功</span><strong id="stat-ok">0</strong></div>
     <div class="score-item"><span>總球數</span><strong id="stat-total">0</strong></div>
     <div class="score-item"><span>連勝</span><strong id="stat-streak">0</strong></div>
   </div>
 </div>
 
-<canvas id="minimap" width="184" height="184"></canvas>
+<div id="game-bug">
+  <div class="bug-row">
+    <div class="teams">
+      <div>客隊 <span id="sc-away">0</span></div>
+      <div class="me">我方 <span id="sc-home">0</span></div>
+    </div>
+    <div class="inning-box">
+      <b id="sc-inn">1上</b>
+      <span id="sc-batter">客 1棒</span>
+    </div>
+    <div class="diamond-wrap">
+      <div class="base-sq" id="b1"></div>
+      <div class="base-sq" id="b2"></div>
+      <div class="base-sq" id="b3"></div>
+    </div>
+  </div>
+  <div class="bso-row">
+    <div class="bso-group">B <i class="dot" id="db0"></i><i class="dot" id="db1"></i><i class="dot" id="db2"></i></div>
+    <div class="bso-group">S <i class="dot" id="ds0"></i><i class="dot" id="ds1"></i></div>
+    <div class="bso-group">O <i class="dot" id="do0"></i><i class="dot" id="do1"></i></div>
+  </div>
+  <div class="role-bar">
+    <span class="role-badge" id="role-badge">中外野守備</span>
+    <span id="my-stats">0-0 | 0HR | 0接殺</span>
+  </div>
+</div>
+
+<div id="ticker">比賽開始！你擔任先發第 3 棒中外野手</div>
+<canvas id="minimap" width="172" height="172"></canvas>
 
 <div id="center-banner">
-  <div class="big-title" id="banner-title">外野飛球模擬</div>
-  <div class="sub-hint" id="banner-sub">中外野第一人稱視角｜準備好就按開始</div>
+  <div class="big-title" id="banner-title">3棒 中外野手</div>
+  <div class="sub-hint" id="banner-sub">完整九局第一人稱比賽｜守備・休息室・打擊・跑壘</div>
 </div>
 
 <div id="start-btn-wrap">
-  <button class="btn primary" id="btn-pitch">投球（Space）</button>
+  <button class="btn primary" id="btn-start">PLAY BALL！（Space）</button>
 </div>
 
 <div id="quiz-controls">
@@ -185,10 +270,16 @@
   <button class="quiz-btn back" id="btn-back">⬇ 往後退（後）</button>
 </div>
 
+<div id="action-bar">
+  <button class="act-btn swing" id="btn-swing" style="display:none;">⚾ 揮棒（Space）</button>
+  <button class="act-btn steal" id="btn-steal" style="display:none;">⚡ 盜壘</button>
+  <button class="act-btn run" id="btn-run" style="display:none;">🏃 按住衝刺（Space）</button>
+</div>
+
 <div id="result-card">
   <div id="result-title">接殺出局！</div>
   <div id="result-sub">漂亮的第一步判斷</div>
-  <div class="stat-grid">
+  <div class="stat-grid" id="result-grid">
     <div class="stat-cell"><label>擊球初速</label><b id="st-ev">-</b></div>
     <div class="stat-cell"><label>擊球仰角</label><b id="st-la">-</b></div>
     <div class="stat-cell"><label>飛行距離</label><b id="st-dist">-</b></div>
@@ -203,7 +294,7 @@
   <button id="dive-btn">撲接</button>
 </div>
 
-<div id="bottom-bar">WASD / 方向鍵跑位 ｜ Space 撲接與下一球</div>
+<div id="bottom-bar">WASD / 搖桿守備 ｜ Space 揮棒・撲接・按住跑壘</div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script>
@@ -218,80 +309,68 @@ const AudioFX = (() => {
     const now = ctx.currentTime;
     const buf = ctx.createBuffer(1, ctx.sampleRate * 0.14, ctx.sampleRate);
     const data = buf.getChannelData(0);
-    for (let i = 0; i < data.length; i++) {
-      data[i] = (Math.random() * 2 - 1) * Math.exp(-i / (ctx.sampleRate * 0.018));
-    }
+    for (let i = 0; i < data.length; i++) data[i] = (Math.random() * 2 - 1) * Math.exp(-i / (ctx.sampleRate * 0.018));
     const noise = ctx.createBufferSource();
     noise.buffer = buf;
     const filter = ctx.createBiquadFilter();
-    filter.type = 'bandpass';
-    filter.frequency.value = 1400 + power * 500;
-    filter.Q.value = 1.4;
+    filter.type = 'bandpass'; filter.frequency.value = 1400 + power * 500; filter.Q.value = 1.4;
     const gain = ctx.createGain();
-    gain.gain.setValueAtTime(0.9 * power, now);
+    gain.gain.setValueAtTime(0.85 * power, now);
     gain.gain.exponentialRampToValueAtTime(0.01, now + 0.14);
     noise.connect(filter).connect(gain).connect(ctx.destination);
     noise.start(now);
-
-    const osc = ctx.createOscillator();
-    const og = ctx.createGain();
+    const osc = ctx.createOscillator(), og = ctx.createGain();
     osc.type = 'triangle';
     osc.frequency.setValueAtTime(520 + power * 180, now);
     osc.frequency.exponentialRampToValueAtTime(140, now + 0.06);
-    og.gain.setValueAtTime(0.5 * power, now);
+    og.gain.setValueAtTime(0.45 * power, now);
     og.gain.exponentialRampToValueAtTime(0.001, now + 0.07);
     osc.connect(og).connect(ctx.destination);
-    osc.start(now);
-    osc.stop(now + 0.07);
+    osc.start(now); osc.stop(now + 0.07);
   }
   function glovePop() {
     ensure();
-    const now = ctx.currentTime;
-    const osc = ctx.createOscillator();
-    const g = ctx.createGain();
+    const now = ctx.currentTime, osc = ctx.createOscillator(), g = ctx.createGain();
     osc.type = 'sine';
     osc.frequency.setValueAtTime(210, now);
     osc.frequency.exponentialRampToValueAtTime(55, now + 0.09);
-    g.gain.setValueAtTime(0.75, now);
+    g.gain.setValueAtTime(0.7, now);
     g.gain.exponentialRampToValueAtTime(0.001, now + 0.1);
     osc.connect(g).connect(ctx.destination);
-    osc.start(now);
-    osc.stop(now + 0.1);
+    osc.start(now); osc.stop(now + 0.1);
   }
   function thud() {
     ensure();
-    const now = ctx.currentTime;
-    const osc = ctx.createOscillator();
-    const g = ctx.createGain();
+    const now = ctx.currentTime, osc = ctx.createOscillator(), g = ctx.createGain();
     osc.type = 'sine';
     osc.frequency.setValueAtTime(110, now);
     osc.frequency.exponentialRampToValueAtTime(38, now + 0.12);
-    g.gain.setValueAtTime(0.5, now);
+    g.gain.setValueAtTime(0.48, now);
     g.gain.exponentialRampToValueAtTime(0.001, now + 0.13);
     osc.connect(g).connect(ctx.destination);
-    osc.start(now);
-    osc.stop(now + 0.13);
+    osc.start(now); osc.stop(now + 0.13);
   }
-  function tone(freq, dur = 0.16) {
+  function tone(freq, dur = 0.15) {
     ensure();
-    const now = ctx.currentTime;
-    const osc = ctx.createOscillator();
-    const g = ctx.createGain();
-    osc.type = 'triangle';
-    osc.frequency.setValueAtTime(freq, now);
-    g.gain.setValueAtTime(0.22, now);
+    const now = ctx.currentTime, osc = ctx.createOscillator(), g = ctx.createGain();
+    osc.type = 'triangle'; osc.frequency.setValueAtTime(freq, now);
+    g.gain.setValueAtTime(0.2, now);
     g.gain.exponentialRampToValueAtTime(0.001, now + dur);
     osc.connect(g).connect(ctx.destination);
-    osc.start(now);
-    osc.stop(now + dur);
+    osc.start(now); osc.stop(now + dur);
   }
-  return { crack, glovePop, thud, tone };
+  function cheer() {
+    tone(523, 0.14);
+    setTimeout(() => tone(659, 0.14), 90);
+    setTimeout(() => tone(784, 0.25), 180);
+  }
+  return { crack, glovePop, thud, tone, cheer };
 })();
 
 const wrap = document.getElementById('canvas-wrap');
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x4b86c6);
-scene.fog = new THREE.FogExp2(0x6da1d4, 0.0022);
+scene.fog = new THREE.FogExp2(0x6da1d4, 0.0021);
 
 const camera = new THREE.PerspectiveCamera(62, window.innerWidth / window.innerHeight, 0.1, 500);
 const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -299,39 +378,34 @@ renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 wrap.appendChild(renderer.domElement);
 
-scene.add(new THREE.HemisphereLight(0xdff2ff, 0x2e5a27, 0.85));
+scene.add(new THREE.HemisphereLight(0xdff2ff, 0x2e5a27, 0.88));
 const sun = new THREE.DirectionalLight(0xfff8e7, 0.9);
 sun.position.set(50, 90, -30);
 scene.add(sun);
 
 function createGrassTexture() {
-  const c = document.createElement('canvas');
-  c.width = 512; c.height = 512;
+  const c = document.createElement('canvas'); c.width = 512; c.height = 512;
   const g = c.getContext('2d');
   for (let i = 0; i < 16; i++) {
     g.fillStyle = i % 2 === 0 ? '#2f7a32' : '#388a3a';
     g.fillRect(0, i * 32, 512, 32);
   }
-  for (let i = 0; i < 6000; i++) {
+  for (let i = 0; i < 5000; i++) {
     g.fillStyle = Math.random() > 0.5 ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.04)';
     g.fillRect(Math.random() * 512, Math.random() * 512, 2, 2);
   }
   const tex = new THREE.CanvasTexture(c);
-  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
-  tex.repeat.set(16, 16);
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping; tex.repeat.set(16, 16);
   return tex;
 }
 
 function createCrowdTexture() {
-  const c = document.createElement('canvas');
-  c.width = 512; c.height = 128;
+  const c = document.createElement('canvas'); c.width = 512; c.height = 128;
   const g = c.getContext('2d');
-  g.fillStyle = '#243447';
-  g.fillRect(0, 0, 512, 128);
+  g.fillStyle = '#243447'; g.fillRect(0, 0, 512, 128);
   const colors = ['#cfd8dc', '#90caf9', '#ef9a9a', '#ffe082', '#ffffff', '#546e7a', '#1e88e5'];
   for (let y = 6; y < 124; y += 8) {
-    g.fillStyle = '#1b2838';
-    g.fillRect(0, y + 4, 512, 2);
+    g.fillStyle = '#1b2838'; g.fillRect(0, y + 4, 512, 2);
     for (let x = 2; x < 512; x += 6) {
       if (Math.random() > 0.25) {
         g.fillStyle = colors[Math.floor(Math.random() * colors.length)];
@@ -340,8 +414,7 @@ function createCrowdTexture() {
     }
   }
   const tex = new THREE.CanvasTexture(c);
-  tex.wrapS = THREE.RepeatWrapping;
-  tex.repeat.set(14, 1);
+  tex.wrapS = THREE.RepeatWrapping; tex.repeat.set(14, 1);
   return tex;
 }
 
@@ -356,8 +429,7 @@ const warningTrack = new THREE.Mesh(
   new THREE.RingGeometry(117, 123, 64, 1, Math.PI * 0.2, Math.PI * 0.6),
   new THREE.MeshLambertMaterial({ color: 0x8d5b3c })
 );
-warningTrack.rotation.x = -Math.PI / 2;
-warningTrack.rotation.z = -Math.PI / 2;
+warningTrack.rotation.x = -Math.PI / 2; warningTrack.rotation.z = -Math.PI / 2;
 warningTrack.position.y = 0.02;
 scene.add(warningTrack);
 
@@ -365,16 +437,14 @@ const infieldDirt = new THREE.Mesh(
   new THREE.CircleGeometry(30, 48),
   new THREE.MeshLambertMaterial({ color: 0xb68657 })
 );
-infieldDirt.rotation.x = -Math.PI / 2;
-infieldDirt.position.set(0, 0.03, 19);
+infieldDirt.rotation.x = -Math.PI / 2; infieldDirt.position.set(0, 0.03, 19);
 scene.add(infieldDirt);
 
 const infieldGrass = new THREE.Mesh(
   new THREE.PlaneGeometry(25, 25),
   new THREE.MeshLambertMaterial({ color: 0x358237 })
 );
-infieldGrass.rotation.x = -Math.PI / 2;
-infieldGrass.rotation.z = Math.PI / 4;
+infieldGrass.rotation.x = -Math.PI / 2; infieldGrass.rotation.z = Math.PI / 4;
 infieldGrass.position.set(0, 0.05, 19.4);
 scene.add(infieldGrass);
 
@@ -385,32 +455,47 @@ const mound = new THREE.Mesh(
 mound.position.set(0, 0.12, 18.44);
 scene.add(mound);
 
-function addBase(x, z) {
-  const b = new THREE.Mesh(
-    new THREE.BoxGeometry(0.55, 0.08, 0.55),
-    new THREE.MeshLambertMaterial({ color: 0xffffff })
-  );
-  b.rotation.y = Math.PI / 4;
-  b.position.set(x, 0.06, z);
+const BASES = [
+  new THREE.Vector3(0, 0, 0),
+  new THREE.Vector3(-19.4, 0, 19.4),
+  new THREE.Vector3(0, 0, 38.8),
+  new THREE.Vector3(19.4, 0, 19.4)
+];
+BASES.forEach(p => {
+  const b = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.08, 0.55), new THREE.MeshLambertMaterial({ color: 0xffffff }));
+  b.rotation.y = Math.PI / 4; b.position.set(p.x, 0.06, p.z);
   scene.add(b);
-}
-addBase(0, 0);
-addBase(-19.4, 19.4);
-addBase(0, 38.8);
-addBase(19.4, 19.4);
+});
+
+const onDeckCircle = new THREE.Mesh(
+  new THREE.RingGeometry(0.9, 1.35, 24),
+  new THREE.MeshBasicMaterial({ color: 0x1565c0, side: THREE.DoubleSide })
+);
+onDeckCircle.rotation.x = -Math.PI / 2;
+onDeckCircle.position.set(-7.5, 0.06, 5.5);
+scene.add(onDeckCircle);
+
+const dugoutGroup = new THREE.Group();
+const dgMat = new THREE.MeshLambertMaterial({ color: 0x263238 });
+const dgRoof = new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.25, 14), dgMat);
+dgRoof.position.set(-16.2, 2.55, 11);
+dgRoof.rotation.y = Math.PI / 4;
+const dgRail = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.08, 13.5), new THREE.MeshLambertMaterial({ color: 0x90a4ae }));
+dgRail.position.set(-15.0, 1.05, 10.2);
+dgRail.rotation.y = Math.PI / 4;
+const dgWall = new THREE.Mesh(new THREE.BoxGeometry(0.25, 0.9, 13.5), new THREE.MeshLambertMaterial({ color: 0x37474f }));
+dgWall.position.set(-15.1, 0.45, 10.2);
+dgWall.rotation.y = Math.PI / 4;
+dugoutGroup.add(dgRoof, dgRail, dgWall);
+scene.add(dugoutGroup);
 
 function addFoulLine(sign) {
-  const line = new THREE.Mesh(
-    new THREE.PlaneGeometry(0.22, 122),
-    new THREE.MeshBasicMaterial({ color: 0xffffff })
-  );
-  line.rotation.x = -Math.PI / 2;
-  line.rotation.z = sign * Math.PI / 4;
+  const line = new THREE.Mesh(new THREE.PlaneGeometry(0.22, 122), new THREE.MeshBasicMaterial({ color: 0xffffff }));
+  line.rotation.x = -Math.PI / 2; line.rotation.z = sign * Math.PI / 4;
   line.position.set(sign * 43.1, 0.06, 43.1);
   scene.add(line);
 }
-addFoulLine(1);
-addFoulLine(-1);
+addFoulLine(1); addFoulLine(-1);
 
 function createPlayerSilhouette(x, z, shirtColor) {
   const g = new THREE.Group();
@@ -425,42 +510,38 @@ function createPlayerSilhouette(x, z, shirtColor) {
   scene.add(g);
   return g;
 }
-createPlayerSilhouette(0, 18.44, 0x1565c0);
-createPlayerSilhouette(-0.9, 0.2, 0xc62828);
-createPlayerSilhouette(0, -1.6, 0x1565c0);
+const pitcherMesh = createPlayerSilhouette(0, 18.44, 0x1565c0);
+const batterMesh = createPlayerSilhouette(0.9, 0.2, 0xc62828);
+const catcherMesh = createPlayerSilhouette(0, -1.6, 0x1565c0);
 createPlayerSilhouette(-18, 28, 0x1565c0);
 createPlayerSilhouette(18, 28, 0x1565c0);
+createPlayerSilhouette(-38, 82, 0x1565c0);
+createPlayerSilhouette(38, 82, 0x1565c0);
 
 const wallRadius = 122;
 const wall = new THREE.Mesh(
   new THREE.CylinderGeometry(wallRadius, wallRadius, 3.2, 64, 1, true, Math.PI * 0.22, Math.PI * 1.56),
   new THREE.MeshLambertMaterial({ color: 0x14452f, side: THREE.DoubleSide })
 );
-wall.position.y = 1.6;
-wall.rotation.y = Math.PI;
-scene.add(wall);
+wall.position.y = 1.6; wall.rotation.y = Math.PI; scene.add(wall);
 
 const hrLine = new THREE.Mesh(
   new THREE.CylinderGeometry(wallRadius - 0.1, wallRadius - 0.1, 0.22, 64, 1, true, Math.PI * 0.22, Math.PI * 1.56),
   new THREE.MeshBasicMaterial({ color: 0xffd600, side: THREE.DoubleSide })
 );
-hrLine.position.y = 3.15;
-hrLine.rotation.y = Math.PI;
-scene.add(hrLine);
+hrLine.position.y = 3.15; hrLine.rotation.y = Math.PI; scene.add(hrLine);
 
 const stands = new THREE.Mesh(
   new THREE.CylinderGeometry(142, 128, 24, 64, 1, true),
   new THREE.MeshLambertMaterial({ map: createCrowdTexture(), side: THREE.BackSide })
 );
-stands.position.y = 12;
-scene.add(stands);
+stands.position.y = 12; scene.add(stands);
 
 const roof = new THREE.Mesh(
   new THREE.CylinderGeometry(144, 142, 4.5, 64, 1, true),
   new THREE.MeshLambertMaterial({ color: 0x1c2b3a, side: THREE.BackSide })
 );
-roof.position.y = 26;
-scene.add(roof);
+roof.position.y = 26; scene.add(roof);
 
 function addCloud(x, y, z, s) {
   const cg = new THREE.Group();
@@ -470,50 +551,47 @@ function addCloud(x, y, z, s) {
     p.position.set((i - 1.5) * 6, Math.random() * 2.5, Math.random() * 3);
     cg.add(p);
   }
-  cg.position.set(x, y, z);
-  cg.scale.setScalar(s);
-  scene.add(cg);
+  cg.position.set(x, y, z); cg.scale.setScalar(s); scene.add(cg);
 }
-addCloud(-40, 72, -110, 1.8);
-addCloud(55, 82, -130, 2.2);
-addCloud(10, 68, -150, 1.5);
-addCloud(-95, 78, -60, 1.7);
-addCloud(95, 75, -40, 1.6);
+addCloud(-40, 72, -110, 1.8); addCloud(55, 82, -130, 2.2);
+addCloud(10, 68, -150, 1.5); addCloud(-95, 78, -60, 1.7); addCloud(95, 75, -40, 1.6);
+
+const szEdges = new THREE.EdgesGeometry(new THREE.BoxGeometry(0.56, 0.72, 0.02));
+const strikeZoneMesh = new THREE.LineSegments(szEdges, new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.75 }));
+strikeZoneMesh.position.set(0, 0.9, 0.25);
+strikeZoneMesh.visible = false;
+scene.add(strikeZoneMesh);
 
 const ballMesh = new THREE.Mesh(
-  new THREE.SphereGeometry(0.11, 16, 16),
+  new THREE.SphereGeometry(0.1, 16, 16),
   new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.35 })
 );
-ballMesh.visible = false;
-scene.add(ballMesh);
+ballMesh.visible = false; scene.add(ballMesh);
 
 const ballShadow = new THREE.Mesh(
   new THREE.CircleGeometry(0.55, 16),
   new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.4 })
 );
-ballShadow.rotation.x = -Math.PI / 2;
-ballShadow.position.y = 0.07;
-ballShadow.visible = false;
+ballShadow.rotation.x = -Math.PI / 2; ballShadow.position.y = 0.07; ballShadow.visible = false;
 scene.add(ballShadow);
 
 const landingRing = new THREE.Mesh(
   new THREE.RingGeometry(0.7, 1.15, 32),
   new THREE.MeshBasicMaterial({ color: 0xffeb3b, side: THREE.DoubleSide, transparent: true, opacity: 0.85 })
 );
-landingRing.rotation.x = -Math.PI / 2;
-landingRing.position.y = 0.08;
-landingRing.visible = false;
+landingRing.rotation.x = -Math.PI / 2; landingRing.position.y = 0.08; landingRing.visible = false;
 scene.add(landingRing);
 
 const trailPts = [];
 const trailGeo = new THREE.BufferGeometry();
-const trailLine = new THREE.Line(
-  trailGeo,
-  new THREE.LineBasicMaterial({ color: 0xfff59d, transparent: true, opacity: 0.7 })
-);
+const trailLine = new THREE.Line(trailGeo, new THREE.LineBasicMaterial({ color: 0xfff59d, transparent: true, opacity: 0.7 }));
 scene.add(trailLine);
 
 const START_POS = new THREE.Vector3(0, 1.7, 92);
+const DUGOUT_POS = new THREE.Vector3(-16.0, 1.45, 11.2);
+const ONDECK_POS = new THREE.Vector3(-7.5, 1.65, 5.5);
+const BATTER_POS = new THREE.Vector3(0.68, 1.48, -0.45);
+
 const player = {
   pos: START_POS.clone(),
   vel: new THREE.Vector3(),
@@ -523,74 +601,160 @@ const player = {
 };
 
 const state = {
-  mode: 'chase',
+  mode: 'game',
   phase: 'IDLE',
   showMarker: false,
-  ok: 0,
-  total: 0,
-  streak: 0,
-  pitchT: 0,
-  flightT: 0,
+  speed: 1,
+  ok: 0, total: 0, streak: 0,
+  pitchT: 0, flightT: 0,
   quizChoice: null,
-  quizFrozen: false,
   ballPos: new THREE.Vector3(),
   ballVel: new THREE.Vector3(),
   meta: null
 };
 
+const game = {
+  active: false,
+  inning: 1,
+  half: 'top',
+  awayScore: 0,
+  homeScore: 0,
+  balls: 0, strikes: 0, outs: 0,
+  bases: [false, false, false],
+  awayOrder: 1,
+  homeOrder: 1,
+  playerBase: 0,
+  subPhase: 'IDLE',
+  timer: 0,
+  pitchDur: 0.56,
+  pitchTarget: new THREE.Vector3(0, 0.9, 0.2),
+  pitchIsStrike: true,
+  pitchSwung: false,
+  simResult: null,
+  runProgress: 0,
+  runTargetBase: 0,
+  runHolding: false,
+  runBallInPlay: false,
+  runSafeTimeout: 0,
+  stealAttempt: false,
+  stats: { ab: 0, h: 0, hr: 0, bb: 0, rbi: 0, po: 0 }
+};
+
 const keys = {};
+let holdRun = false;
+
 window.addEventListener('keydown', e => {
   keys[e.code] = true;
   if (e.code === 'Space') {
     e.preventDefault();
-    if (state.phase === 'IDLE') startPitch();
-    else if (state.phase === 'RESULT') startPitch();
-    else if (state.phase === 'IN_FLIGHT' && state.mode === 'chase') triggerDive();
+    if (state.mode === 'game') {
+      if (!game.active) startGameMode();
+      else if (game.subPhase === 'BAT_PITCH') swingBat();
+      else if (game.subPhase === 'DEF_CF_PLAY') triggerDive();
+      else if (game.subPhase === 'BASE_RUN') holdRun = true;
+    } else {
+      if (state.phase === 'IDLE' || state.phase === 'RESULT') startPracticePitch();
+      else if (state.phase === 'IN_FLIGHT' && state.mode === 'chase') triggerDive();
+    }
   }
   if (state.phase === 'QUIZ_WAIT') {
     if (e.code === 'ArrowUp' || e.code === 'KeyW') submitQuiz('front');
     if (e.code === 'ArrowDown' || e.code === 'KeyS') submitQuiz('back');
   }
 });
-window.addEventListener('keyup', e => { keys[e.code] = false; });
+window.addEventListener('keyup', e => {
+  keys[e.code] = false;
+  if (e.code === 'Space') holdRun = false;
+});
 
 const joy = { active: false, dx: 0, dy: 0, id: null };
 const joyZone = document.getElementById('joy-zone');
 const joyKnob = document.getElementById('joy-knob');
 
-function updateJoy(clientX, clientY) {
+function updateJoy(cx, cy) {
   const rect = joyZone.getBoundingClientRect();
-  const cx = rect.left + rect.width / 2;
-  const cy = rect.top + rect.height / 2;
   const maxR = rect.width * 0.38;
-  let dx = clientX - cx;
-  let dy = clientY - cy;
+  let dx = cx - (rect.left + rect.width / 2);
+  let dy = cy - (rect.top + rect.height / 2);
   const len = Math.hypot(dx, dy);
   if (len > maxR) { dx = dx / len * maxR; dy = dy / len * maxR; }
-  joy.dx = dx / maxR;
-  joy.dy = dy / maxR;
+  joy.dx = dx / maxR; joy.dy = dy / maxR;
   joyKnob.style.transform = `translate(${dx}px, ${dy}px)`;
 }
-
-joyZone.addEventListener('pointerdown', e => {
-  joy.active = true; joy.id = e.pointerId;
-  joyZone.setPointerCapture(e.pointerId);
-  updateJoy(e.clientX, e.clientY);
-});
-joyZone.addEventListener('pointermove', e => {
-  if (joy.active && e.pointerId === joy.id) updateJoy(e.clientX, e.clientY);
-});
-function endJoy() {
-  joy.active = false; joy.dx = 0; joy.dy = 0;
-  joyKnob.style.transform = 'translate(0px, 0px)';
-}
+joyZone.addEventListener('pointerdown', e => { joy.active = true; joy.id = e.pointerId; joyZone.setPointerCapture(e.pointerId); updateJoy(e.clientX, e.clientY); });
+joyZone.addEventListener('pointermove', e => { if (joy.active && e.pointerId === joy.id) updateJoy(e.clientX, e.clientY); });
+function endJoy() { joy.active = false; joy.dx = 0; joy.dy = 0; joyKnob.style.transform = 'translate(0px, 0px)'; }
 joyZone.addEventListener('pointerup', endJoy);
 joyZone.addEventListener('pointercancel', endJoy);
 
 document.getElementById('dive-btn').addEventListener('pointerdown', e => {
   e.preventDefault();
-  if (state.phase === 'IN_FLIGHT' && state.mode === 'chase') triggerDive();
+  if ((state.mode === 'chase' && state.phase === 'IN_FLIGHT') || (state.mode === 'game' && game.subPhase === 'DEF_CF_PLAY')) triggerDive();
 });
+
+const btnSwing = document.getElementById('btn-swing');
+const btnSteal = document.getElementById('btn-steal');
+const btnRun = document.getElementById('btn-run');
+const actionBar = document.getElementById('action-bar');
+const ticker = document.getElementById('ticker');
+const bannerTitle = document.getElementById('banner-title');
+const bannerSub = document.getElementById('banner-sub');
+const resultCard = document.getElementById('result-card');
+const startWrap = document.getElementById('start-btn-wrap');
+const quizControls = document.getElementById('quiz-controls');
+const touchControls = document.getElementById('touch-controls');
+const gameBug = document.getElementById('game-bug');
+const practiceScore = document.getElementById('practice-score');
+
+btnSwing.addEventListener('pointerdown', e => { e.preventDefault(); swingBat(); });
+btnSteal.addEventListener('pointerdown', e => { e.preventDefault(); attemptSteal(); });
+btnRun.addEventListener('pointerdown', e => { e.preventDefault(); holdRun = true; });
+btnRun.addEventListener('pointerup', () => { holdRun = false; });
+btnRun.addEventListener('pointercancel', () => { holdRun = false; });
+btnRun.addEventListener('pointerleave', () => { holdRun = false; });
+
+function setTicker(msg) { ticker.textContent = msg; }
+function setBanner(title, sub = '') { bannerTitle.textContent = title; bannerSub.textContent = sub; }
+
+function updateGameUI() {
+  document.getElementById('sc-away').textContent = game.awayScore;
+  document.getElementById('sc-home').textContent = game.homeScore;
+  document.getElementById('sc-inn').textContent = `${game.inning}${game.half === 'top' ? '上' : '下'}`;
+  const order = game.half === 'top' ? game.awayOrder : game.homeOrder;
+  const isMeBat = game.half === 'bottom' && order === 3;
+  document.getElementById('sc-batter').textContent = game.half === 'top' ? `客 ${order}棒` : (isMeBat ? '我 3棒(你)' : `我 ${order}棒`);
+
+  for (let i = 0; i < 3; i++) {
+    const el = document.getElementById(`b${i + 1}`);
+    el.className = 'base-sq';
+    if (game.half === 'bottom' && game.playerBase === i + 1) el.classList.add('me');
+    else if (game.bases[i]) el.classList.add('on');
+  }
+  for (let i = 0; i < 3; i++) document.getElementById(`db${i}`).className = 'dot' + (i < game.balls ? ' b' : '');
+  for (let i = 0; i < 2; i++) document.getElementById(`ds${i}`).className = 'dot' + (i < game.strikes ? ' s' : '');
+  for (let i = 0; i < 2; i++) document.getElementById(`do${i}`).className = 'dot' + (i < game.outs ? ' o' : '');
+
+  const badge = document.getElementById('role-badge');
+  badge.className = 'role-badge';
+  if (game.half === 'top') {
+    badge.textContent = '中外野守備';
+  } else if (game.playerBase > 0) {
+    badge.textContent = `${['', '一', '二', '三'][game.playerBase]}壘跑者`;
+    badge.classList.add('run');
+  } else if (game.homeOrder === 3) {
+    badge.textContent = '打擊區（3棒）';
+    badge.classList.add('bat');
+  } else if (game.homeOrder === 2) {
+    badge.textContent = '打擊準備區';
+    badge.classList.add('bat');
+  } else {
+    badge.textContent = '休息室觀戰';
+    badge.classList.add('dug');
+  }
+
+  const s = game.stats;
+  document.getElementById('my-stats').textContent = `${s.ab}-${s.h} | ${s.hr}HR | ${s.po}接殺`;
+}
 
 function stepPhysics(pos, vel, spin, dt) {
   const speed = vel.length();
@@ -606,14 +770,9 @@ function simulateHit(ev, laDeg, sprayDeg, spin) {
   const la = THREE.MathUtils.degToRad(laDeg);
   const sp = THREE.MathUtils.degToRad(sprayDeg);
   const pos = new THREE.Vector3(0, 1.05, 0.3);
-  const vel = new THREE.Vector3(
-    ev * Math.cos(la) * Math.sin(sp),
-    ev * Math.sin(la),
-    ev * Math.cos(la) * Math.cos(sp)
-  );
+  const vel = new THREE.Vector3(ev * Math.cos(la) * Math.sin(sp), ev * Math.sin(la), ev * Math.cos(la) * Math.cos(sp));
   const dt = 1 / 120;
-  let t = 0;
-  let maxH = 0;
+  let t = 0, maxH = 0;
   while (pos.y > 0.1 && t < 10) {
     stepPhysics(pos, vel, spin, dt);
     if (pos.y > maxH) maxH = pos.y;
@@ -622,154 +781,23 @@ function simulateHit(ev, laDeg, sprayDeg, spin) {
   return { land: pos.clone(), hang: t, maxH };
 }
 
-function generatePlayableBall() {
+function generatePlayableBall(narrow = false) {
   for (let tries = 0; tries < 80; tries++) {
     const ev = 38 + Math.random() * 10.5;
     const la = 19 + Math.random() * 28;
-    const spray = state.mode === 'quiz'
-      ? (Math.random() * 10 - 5)
-      : (Math.random() * 24 - 12);
+    const spray = narrow ? (Math.random() * 10 - 5) : (Math.random() * 24 - 12);
     const spin = 0.8 + Math.random() * 1.1;
     const sim = simulateHit(ev, la, spray, spin);
     const dist = Math.hypot(sim.land.x, sim.land.z);
     const deltaZ = sim.land.z - START_POS.z;
-    if (state.mode === 'quiz') {
-      if (dist > 64 && dist < 118 && Math.abs(deltaZ) > 5.5 && Math.abs(deltaZ) < 25) {
-        return { ev, la, spray, spin, ...sim, dist, deltaZ };
-      }
+    if (narrow) {
+      if (dist > 64 && dist < 118 && Math.abs(deltaZ) > 5.5 && Math.abs(deltaZ) < 25) return { ev, la, spray, spin, ...sim, dist, deltaZ };
     } else {
-      if (dist > 62 && dist < 120 && Math.abs(sim.land.x) < 28) {
-        return { ev, la, spray, spin, ...sim, dist, deltaZ };
-      }
+      if (dist > 62 && dist < 120 && Math.abs(sim.land.x) < 28) return { ev, la, spray, spin, ...sim, dist, deltaZ };
     }
   }
   const sim = simulateHit(43, 30, 0, 1.2);
   return { ev: 43, la: 30, spray: 0, spin: 1.2, ...sim, dist: sim.land.z, deltaZ: sim.land.z - START_POS.z };
-}
-
-const bannerTitle = document.getElementById('banner-title');
-const bannerSub = document.getElementById('banner-sub');
-const resultCard = document.getElementById('result-card');
-const startWrap = document.getElementById('start-btn-wrap');
-const quizControls = document.getElementById('quiz-controls');
-const touchControls = document.getElementById('touch-controls');
-
-function updateScoreUI() {
-  document.getElementById('stat-ok').textContent = state.ok;
-  document.getElementById('stat-total').textContent = state.total;
-  document.getElementById('stat-streak').textContent = state.streak;
-}
-
-function resetPlayer() {
-  player.pos.copy(START_POS);
-  player.vel.set(0, 0, 0);
-  player.diving = false;
-  player.diveTimer = 0;
-  camera.position.copy(player.pos);
-  camera.lookAt(0, 2.2, 0);
-}
-
-function startPitch() {
-  resultCard.style.display = 'none';
-  startWrap.style.display = 'none';
-  quizControls.style.display = 'none';
-  resetPlayer();
-
-  state.meta = generatePlayableBall();
-  state.phase = 'PITCHING';
-  state.pitchT = 0;
-  state.flightT = 0;
-  state.quizChoice = null;
-  state.quizFrozen = false;
-  trailPts.length = 0;
-  trailGeo.setFromPoints([]);
-
-  ballMesh.visible = true;
-  ballMesh.position.set(0, 1.85, 18.44);
-  ballShadow.visible = false;
-  landingRing.visible = false;
-
-  bannerTitle.textContent = '';
-  bannerSub.textContent = '投球中...';
-}
-
-function launchBall() {
-  const m = state.meta;
-  const la = THREE.MathUtils.degToRad(m.la);
-  const sp = THREE.MathUtils.degToRad(m.spray);
-  state.ballPos.set(0, 1.05, 0.3);
-  state.ballVel.set(
-    m.ev * Math.cos(la) * Math.sin(sp),
-    m.ev * Math.sin(la),
-    m.ev * Math.cos(la) * Math.cos(sp)
-  );
-  AudioFX.crack(THREE.MathUtils.clamp((m.ev - 36) / 12, 0.55, 1.25));
-  state.phase = 'IN_FLIGHT';
-  ballShadow.visible = true;
-  if (state.showMarker && state.mode === 'chase') {
-    landingRing.position.set(m.land.x, 0.08, m.land.z);
-    landingRing.visible = true;
-  }
-  bannerSub.textContent = state.mode === 'quiz' ? '看球！準備判斷前還是後...' : '';
-}
-
-function triggerDive() {
-  if (player.diving) return;
-  const dir = getMoveInput();
-  if (dir.lengthSq() < 0.05) {
-    dir.set(state.ballPos.x - player.pos.x, 0, state.ballPos.z - player.pos.z);
-  }
-  dir.y = 0;
-  if (dir.lengthSq() > 0.001) dir.normalize();
-  player.diving = true;
-  player.diveTimer = 0.52;
-  player.diveDir.copy(dir);
-  AudioFX.tone(180, 0.08);
-}
-
-function submitQuiz(choice) {
-  if (state.phase !== 'QUIZ_WAIT') return;
-  state.quizChoice = choice;
-  quizControls.style.display = 'none';
-  bannerTitle.textContent = choice === 'front' ? '你選：往前衝！' : '你選：往後退！';
-  bannerSub.textContent = '揭曉真實落點...';
-  landingRing.position.set(state.meta.land.x, 0.08, state.meta.land.z);
-  landingRing.visible = true;
-  state.phase = 'IN_FLIGHT';
-  state.quizFrozen = false;
-}
-
-function finishPlay(outcome, title, sub, color) {
-  state.phase = 'RESULT';
-  state.total++;
-  if (outcome) {
-    state.ok++;
-    state.streak++;
-  } else {
-    state.streak = 0;
-  }
-  updateScoreUI();
-
-  const m = state.meta;
-  const kmh = (m.ev * 3.6).toFixed(1);
-  const mph = (m.ev * 2.237).toFixed(1);
-  document.getElementById('result-title').textContent = title;
-  document.getElementById('result-title').style.color = color;
-  document.getElementById('result-sub').textContent = sub;
-  document.getElementById('st-ev').textContent = `${kmh} km/h (${mph} mph)`;
-  document.getElementById('st-la').textContent = `${m.la.toFixed(1)}°`;
-  document.getElementById('st-dist').textContent = `${m.dist.toFixed(1)} m`;
-  document.getElementById('st-hang').textContent = `${m.hang.toFixed(2)} s`;
-
-  const dz = m.deltaZ;
-  const dirText = dz < 0
-    ? `站位前方 ${Math.abs(dz).toFixed(1)} 公尺（往前衝）`
-    : `站位後方 ${Math.abs(dz).toFixed(1)} 公尺（往後退）`;
-  document.getElementById('st-delta').textContent = dirText;
-
-  bannerTitle.textContent = '';
-  bannerSub.textContent = '';
-  resultCard.style.display = 'block';
 }
 
 function getMoveInput() {
@@ -778,101 +806,669 @@ function getMoveInput() {
   if (keys['KeyS'] || keys['ArrowDown']) z += 1;
   if (keys['KeyA'] || keys['ArrowLeft']) x -= 1;
   if (keys['KeyD'] || keys['ArrowRight']) x += 1;
-  if (joy.active) {
-    x += joy.dx;
-    z += joy.dy;
-  }
+  if (joy.active) { x += joy.dx; z += joy.dy; }
   const v = new THREE.Vector3(x, 0, z);
   if (v.length() > 1) v.normalize();
   return v;
 }
 
-const minimap = document.getElementById('minimap');
-const mctx = minimap.getContext('2d');
-function drawMinimap() {
-  const w = minimap.width, h = minimap.height;
-  mctx.clearRect(0, 0, w, h);
-  const ox = w / 2, oy = h - 18, scale = 1.2;
+function triggerDive() {
+  if (player.diving) return;
+  const dir = getMoveInput();
+  if (dir.lengthSq() < 0.05) dir.set(state.ballPos.x - player.pos.x, 0, state.ballPos.z - player.pos.z);
+  dir.y = 0;
+  if (dir.lengthSq() > 0.001) dir.normalize();
+  player.diving = true; player.diveTimer = 0.52; player.diveDir.copy(dir);
+  AudioFX.tone(180, 0.08);
+}
 
-  mctx.beginPath();
-  mctx.moveTo(ox, oy);
-  mctx.arc(ox, oy, 122 * scale, -Math.PI * 0.75, -Math.PI * 0.25);
-  mctx.closePath();
-  mctx.fillStyle = 'rgba(56, 142, 60, 0.45)';
-  mctx.fill();
-  mctx.strokeStyle = 'rgba(255,255,255,0.45)';
-  mctx.lineWidth = 2;
-  mctx.stroke();
+function resetPlayerCF() {
+  player.pos.copy(START_POS);
+  player.vel.set(0, 0, 0);
+  player.diving = false; player.diveTimer = 0;
+  camera.position.copy(player.pos);
+  lookTarget.set(0, 2.2, 0);
+  camera.lookAt(lookTarget);
+}
 
-  const px = ox - player.pos.x * scale;
-  const pz = oy - player.pos.z * scale;
-  mctx.fillStyle = '#29b6f6';
-  mctx.beginPath();
-  mctx.arc(px, pz, 5.5, 0, Math.PI * 2);
-  mctx.fill();
+function addRuns(n) {
+  if (n <= 0) return;
+  if (game.half === 'top') game.awayScore += n;
+  else game.homeScore += n;
+}
 
-  if (landingRing.visible && state.meta) {
-    const lx = ox - state.meta.land.x * scale;
-    const lz = oy - state.meta.land.z * scale;
-    mctx.strokeStyle = '#ffeb3b';
-    mctx.lineWidth = 2.5;
-    mctx.beginPath();
-    mctx.arc(lx, lz, 6, 0, Math.PI * 2);
-    mctx.stroke();
+function advanceRunners(numBases, isWalk = false, isMeBatting = false) {
+  let scored = 0;
+  if (isWalk) {
+    if (game.bases[0] && game.bases[1] && game.bases[2]) {
+      scored++;
+      if (game.half === 'bottom' && game.playerBase === 3) game.playerBase = 0;
+    }
+    if (game.bases[0] && game.bases[1]) {
+      game.bases[2] = true;
+      if (game.half === 'bottom' && game.playerBase === 2) game.playerBase = 3;
+    }
+    if (game.bases[0]) {
+      game.bases[1] = true;
+      if (game.half === 'bottom' && game.playerBase === 1) game.playerBase = 2;
+    }
+    game.bases[0] = true;
+    if (isMeBatting) game.playerBase = 1;
+  } else {
+    const nextBases = [false, false, false];
+    let nextMe = 0;
+    for (let i = 2; i >= 0; i--) {
+      if (game.bases[i]) {
+        const dest = i + 1 + numBases;
+        const wasMe = (game.half === 'bottom' && game.playerBase === i + 1);
+        if (dest >= 4) {
+          scored++;
+          if (wasMe) setTicker('你跑回本壘得分！');
+        } else {
+          nextBases[dest - 1] = true;
+          if (wasMe) nextMe = dest;
+        }
+      }
+    }
+    if (numBases >= 4) {
+      scored++;
+    } else if (numBases > 0) {
+      nextBases[numBases - 1] = true;
+      if (isMeBatting) nextMe = numBases;
+    }
+    game.bases = nextBases;
+    if (game.half === 'bottom') game.playerBase = nextMe;
   }
+  addRuns(scored);
+  if (isMeBatting) game.stats.rbi += scored;
+  return scored;
+}
 
-  if (state.phase === 'IN_FLIGHT' || state.phase === 'QUIZ_WAIT') {
-    const bx = ox - state.ballPos.x * scale;
-    const bz = oy - state.ballPos.z * scale;
-    mctx.fillStyle = '#ffffff';
-    mctx.beginPath();
-    mctx.arc(bx, bz, 3.5, 0, Math.PI * 2);
-    mctx.fill();
+function nextBatter() {
+  game.balls = 0; game.strikes = 0;
+  if (game.half === 'top') game.awayOrder = (game.awayOrder % 9) + 1;
+  else game.homeOrder = (game.homeOrder % 9) + 1;
+}
+
+function addOut(msg) {
+  game.outs++;
+  setTicker(msg);
+  if (game.outs >= 3) {
+    game.outs = 0; game.balls = 0; game.strikes = 0;
+    game.bases = [false, false, false];
+    game.playerBase = 0;
+    if (game.half === 'top') game.awayOrder = (game.awayOrder % 9) + 1;
+    else game.homeOrder = (game.homeOrder % 9) + 1;
+
+    if (game.half === 'bottom' && game.inning >= 9) {
+      endFullGame();
+      return;
+    }
+    if (game.half === 'top') {
+      game.half = 'bottom';
+      if (game.inning === 9 && game.homeScore > game.awayScore) {
+        endFullGame();
+        return;
+      }
+      setBanner(`${game.inning}局下半`, '三出局攻守交換｜換我方進攻！');
+    } else {
+      game.half = 'top';
+      game.inning++;
+      setBanner(`${game.inning}局上半`, '三出局攻守交換｜前往中外野守備！');
+    }
+    game.subPhase = 'CHANGE_SIDES';
+    game.timer = 2.2;
+    hideAllActionUI();
+    updateGameUI();
+    return true;
+  }
+  return false;
+}
+
+function endFullGame() {
+  game.active = false;
+  game.subPhase = 'OVER';
+  hideAllActionUI();
+  const win = game.homeScore > game.awayScore;
+  const tie = game.homeScore === game.awayScore;
+  document.getElementById('result-title').textContent = win ? '比賽勝利！' : (tie ? '握手言和' : '惜敗收場');
+  document.getElementById('result-title').style.color = win ? '#66bb6a' : (tie ? '#ffca28' : '#ef5350');
+  document.getElementById('result-sub').textContent = `終場比數 客隊 ${game.awayScore} : ${game.homeScore} 我方`;
+  const s = game.stats;
+  document.getElementById('st-ev').textContent = `${s.ab} 打數 ${s.h} 安打`;
+  document.getElementById('st-la').textContent = `${s.hr} 支全壘打`;
+  document.getElementById('st-dist').textContent = `${s.rbi} 打點 / ${s.bb} 保送`;
+  document.getElementById('st-hang').textContent = `${s.po} 次接殺`;
+  document.getElementById('st-delta').textContent = `打擊率 ${s.ab > 0 ? (s.h / s.ab).toFixed(3) : '.000'}`;
+  document.getElementById('btn-next').textContent = '再打一場（Space）';
+  resultCard.style.display = 'block';
+  updateGameUI();
+}
+
+function hideAllActionUI() {
+  actionBar.style.display = 'none';
+  btnSwing.style.display = 'none';
+  btnSteal.style.display = 'none';
+  btnRun.style.display = 'none';
+  touchControls.style.display = 'none';
+  strikeZoneMesh.visible = false;
+  landingRing.visible = false;
+}
+
+function startGameMode() {
+  resultCard.style.display = 'none';
+  startWrap.style.display = 'none';
+  game.active = true;
+  game.inning = 1; game.half = 'top';
+  game.awayScore = 0; game.homeScore = 0;
+  game.balls = 0; game.strikes = 0; game.outs = 0;
+  game.bases = [false, false, false];
+  game.awayOrder = 1; game.homeOrder = 1;
+  game.playerBase = 0;
+  game.stats = { ab: 0, h: 0, hr: 0, bb: 0, rbi: 0, po: 0 };
+  ticker.style.display = 'block';
+  setBanner('1局上半', '先發 3 棒中外野手，就守備位置！');
+  game.subPhase = 'CHANGE_SIDES';
+  game.timer = 1.6;
+  updateGameUI();
+}
+
+function enterCurrentRole() {
+  hideAllActionUI();
+  ballMesh.visible = false;
+  ballShadow.visible = false;
+  batterMesh.visible = true;
+  setBanner('', '');
+  updateGameUI();
+
+  if (game.half === 'top') {
+    resetPlayerCF();
+    touchControls.style.display = 'block';
+    game.subPhase = 'DEF_WAIT';
+    game.timer = 1.35 / state.speed;
+    setTicker(`客隊 ${game.awayOrder} 棒打擊中｜你在中外野待命`);
+  } else {
+    if (game.playerBase > 0) {
+      const bPos = BASES[game.playerBase];
+      camera.position.set(bPos.x, 1.65, bPos.z);
+      lookTarget.set(0, 1.4, 10);
+      camera.lookAt(lookTarget);
+      actionBar.style.display = 'flex';
+      const canSteal = game.playerBase < 3 && !game.bases[game.playerBase];
+      btnSteal.style.display = canSteal ? 'block' : 'none';
+      game.subPhase = 'OFF_SIM_WAIT';
+      game.timer = 1.5 / state.speed;
+      setTicker(`你在${['', '一', '二', '三'][game.playerBase]}壘｜隊友 ${game.homeOrder} 棒打擊中`);
+    } else if (game.homeOrder === 3) {
+      batterMesh.visible = false;
+      camera.position.copy(BATTER_POS);
+      lookTarget.set(0, 1.1, 18.44);
+      camera.lookAt(lookTarget);
+      strikeZoneMesh.visible = true;
+      actionBar.style.display = 'flex';
+      btnSwing.style.display = 'block';
+      game.subPhase = 'BAT_WAIT';
+      game.timer = 1.25;
+      setTicker('輪到你了（第 3 棒）！盯緊投手準備揮棒');
+    } else {
+      const isOnDeck = game.homeOrder === 2;
+      camera.position.copy(isOnDeck ? ONDECK_POS : DUGOUT_POS);
+      lookTarget.set(0, 1.5, 10);
+      camera.lookAt(lookTarget);
+      game.subPhase = 'OFF_SIM_WAIT';
+      game.timer = 1.35 / state.speed;
+      setTicker(isOnDeck ? '打擊準備區熱身中（下一棒就是你！）' : `休息室觀戰｜我方 ${game.homeOrder} 棒打擊中`);
+    }
   }
 }
 
-document.getElementById('mode-chase').onclick = () => {
-  state.mode = 'chase';
-  document.getElementById('mode-chase').classList.add('active');
-  document.getElementById('mode-quiz').classList.remove('active');
-  touchControls.style.display = 'block';
-  bannerTitle.textContent = '實戰追接模式';
-  bannerSub.textContent = '靠視線與聲音判斷落點，跑位接殺飛球';
-  resultCard.style.display = 'none';
-  quizControls.style.display = 'none';
-  startWrap.style.display = 'block';
-  state.phase = 'IDLE';
-  resetPlayer();
-};
+function launchSimPitch(isDefense) {
+  game.subPhase = isDefense ? 'DEF_PITCH' : 'OFF_SIM_PITCH';
+  state.pitchT = 0;
+  ballMesh.visible = true;
+  ballMesh.position.set(0, 1.85, 18.44);
+  const r = Math.random();
+  if (r < 0.25) game.simResult = 'BALL';
+  else if (r < 0.44) game.simResult = 'STRIKE_LOOK';
+  else if (r < 0.56) game.simResult = 'STRIKE_SWING';
+  else if (r < 0.69) game.simResult = 'FOUL';
+  else {
+    const b = Math.random();
+    if (isDefense) {
+      if (b < 0.36) game.simResult = 'CF_BALL';
+      else if (b < 0.66) game.simResult = 'INFIELD_OUT';
+      else if (b < 0.84) game.simResult = 'CORNER_OUT';
+      else if (b < 0.96) game.simResult = 'CORNER_HIT';
+      else game.simResult = 'AWAY_HR';
+    } else {
+      if (b < 0.46) game.simResult = 'TEAM_OUT';
+      else if (b < 0.74) game.simResult = 'TEAM_1B';
+      else if (b < 0.90) game.simResult = 'TEAM_2B';
+      else game.simResult = 'TEAM_HR';
+    }
+  }
+}
 
-document.getElementById('mode-quiz').onclick = () => {
-  state.mode = 'quiz';
-  document.getElementById('mode-quiz').classList.add('active');
-  document.getElementById('mode-chase').classList.remove('active');
-  touchControls.style.display = 'none';
-  bannerTitle.textContent = '這顆飛球，前？後？';
-  bannerSub.textContent = '擊球後 1.2 秒瞬間判斷要往前衝還是往後退';
+function resolveSimPitch(isDefense) {
+  const res = game.simResult;
+  if (res === 'BALL') {
+    AudioFX.glovePop();
+    game.balls++;
+    if (game.balls >= 4) {
+      setTicker('四壞球保送！打者上一壘');
+      advanceRunners(1, true, false);
+      nextBatter();
+    } else setTicker(`壞球！（${game.balls} 壞 ${game.strikes} 好）`);
+    enterAfterPause(1.0);
+  } else if (res === 'STRIKE_LOOK' || res === 'STRIKE_SWING') {
+    AudioFX.glovePop();
+    game.strikes++;
+    const label = res === 'STRIKE_LOOK' ? '好球進壘' : '揮棒落空';
+    if (game.strikes >= 3) {
+      AudioFX.tone(320, 0.2);
+      if (!addOut(`${label}！三振出局！`)) {
+        nextBatter();
+        enterAfterPause(1.1);
+      }
+    } else {
+      setTicker(`${label}！（${game.balls} 壞 ${game.strikes} 好）`);
+      enterAfterPause(0.95);
+    }
+  } else if (res === 'FOUL') {
+    AudioFX.crack(0.7);
+    if (game.strikes < 2) game.strikes++;
+    setTicker(`界外球！（${game.balls} 壞 ${game.strikes} 好）`);
+    launchVisualBall(32, 34, (Math.random() > 0.5 ? 1 : -1) * (58 + Math.random() * 20), 0.7);
+    game.subPhase = 'WATCH_BALL';
+    game.timer = 1.4 / state.speed;
+  } else if (res === 'CF_BALL') {
+    state.meta = generatePlayableBall(false);
+    const m = state.meta;
+    launchVisualBall(m.ev, m.la, m.spray, m.spin);
+    AudioFX.crack(THREE.MathUtils.clamp((m.ev - 36) / 12, 0.65, 1.25));
+    if (state.showMarker) {
+      landingRing.position.set(m.land.x, 0.08, m.land.z);
+      landingRing.visible = true;
+    }
+    setTicker('⚡ 打向中外野！快追球！');
+    setBanner('中外野飛球！', '跑位接殺！');
+    setTimeout(() => { if (game.subPhase === 'DEF_CF_PLAY') setBanner('', ''); }, 900);
+    game.subPhase = 'DEF_CF_PLAY';
+  } else if (res === 'INFIELD_OUT' || res === 'CORNER_OUT' || res === 'TEAM_OUT') {
+    AudioFX.crack(0.8);
+    const isGround = Math.random() < 0.55;
+    const spray = res === 'CORNER_OUT' ? (Math.random() > 0.5 ? 28 : -28) : (Math.random() * 50 - 25);
+    launchVisualBall(isGround ? 28 : 37, isGround ? 8 : 35, spray, 0.9);
+    const desc = isGround ? '滾地球刺殺出局！' : '高飛球接殺出局！';
+    if (!addOut(desc)) {
+      nextBatter();
+      game.subPhase = 'WATCH_BALL';
+      game.timer = 1.7 / state.speed;
+    }
+  } else if (res === 'CORNER_HIT' || res === 'AWAY_HR') {
+    AudioFX.crack(1.15);
+    const isHR = res === 'AWAY_HR';
+    launchVisualBall(isHR ? 49 : 41, isHR ? 30 : 14, (Math.random() > 0.5 ? 1 : -1) * (24 + Math.random() * 14), 1.1);
+    const nb = isHR ? 4 : (Math.random() < 0.7 ? 1 : 2);
+    const sc = advanceRunners(nb, false, false);
+    setTicker(`${isHR ? '客隊全壘打！' : (nb === 2 ? '客隊二壘安打！' : '客隊安打！')}${sc > 0 ? ` 失 ${sc} 分` : ''}`);
+    nextBatter();
+    game.subPhase = 'WATCH_BALL';
+    game.timer = 2.0 / state.speed;
+  } else if (res === 'TEAM_1B' || res === 'TEAM_2B' || res === 'TEAM_HR') {
+    AudioFX.crack(1.15);
+    const nb = res === 'TEAM_HR' ? 4 : (res === 'TEAM_2B' ? 2 : 1);
+    launchVisualBall(nb === 4 ? 50 : 42, nb === 4 ? 30 : 16, Math.random() * 44 - 22, 1.1);
+    if (game.playerBase > 0 && nb < 4) {
+      startInteractiveBaserunning(nb);
+    } else {
+      const sc = advanceRunners(nb, false, false);
+      if (nb === 4) AudioFX.cheer();
+      setTicker(`隊友擊出${nb === 4 ? '全壘打！' : (nb === 2 ? '二壘安打！' : '安打！')}${sc > 0 ? ` 得 ${sc} 分！` : ''}`);
+      nextBatter();
+      game.subPhase = 'WATCH_BALL';
+      game.timer = 2.0 / state.speed;
+    }
+  }
+  updateGameUI();
+}
+
+function launchVisualBall(ev, laDeg, sprayDeg, spin) {
+  const la = THREE.MathUtils.degToRad(laDeg);
+  const sp = THREE.MathUtils.degToRad(sprayDeg);
+  state.ballPos.set(0, 1.05, 0.3);
+  state.ballVel.set(ev * Math.cos(la) * Math.sin(sp), ev * Math.sin(la), ev * Math.cos(la) * Math.cos(sp));
+  state.meta = { spin };
+  ballMesh.visible = true;
+  ballShadow.visible = true;
+}
+
+function enterAfterPause(sec) {
+  game.subPhase = 'PAUSE_NEXT';
+  game.timer = sec / state.speed;
+  updateGameUI();
+}
+
+function launchPlayerAtBatPitch() {
+  game.subPhase = 'BAT_PITCH';
+  game.pitchSwung = false;
+  state.pitchT = 0;
+  game.pitchDur = 0.54 + Math.random() * 0.16;
+  const isStrike = Math.random() < 0.62;
+  game.pitchIsStrike = isStrike;
+  if (isStrike) {
+    game.pitchTarget.set((Math.random() - 0.5) * 0.44, 0.62 + Math.random() * 0.56, 0.22);
+  } else {
+    const side = Math.random() < 0.5 ? (Math.random() > 0.5 ? 0.48 : -0.48) : (Math.random() - 0.5) * 0.6;
+    const high = Math.abs(side) < 0.35 ? (Math.random() > 0.5 ? 1.52 : 0.32) : (0.5 + Math.random() * 0.8);
+    game.pitchTarget.set(side, high, 0.22);
+  }
+  ballMesh.visible = true;
+  ballMesh.position.set(0, 1.85, 18.44);
+}
+
+function swingBat() {
+  if (game.subPhase !== 'BAT_PITCH' || game.pitchSwung) return;
+  game.pitchSwung = true;
+  const z = ballMesh.position.z;
+  const err = Math.abs(z - 0.9);
+  const zonePenalty = game.pitchIsStrike ? 0 : 0.7;
+
+  if (err + zonePenalty < 1.35) {
+    const quality = 1 - (err + zonePenalty) / 1.35;
+    AudioFX.crack(0.85 + quality * 0.45);
+    const ev = 36 + quality * 15;
+    const la = 10 + Math.random() * 24 + quality * 6;
+    const spray = (z - 0.9) * 14 + (Math.random() * 14 - 7);
+    const sim = simulateHit(ev, la, spray, 1.1);
+    const dist = Math.hypot(sim.land.x, sim.land.z);
+    launchVisualBall(ev, la, spray, 1.1);
+    strikeZoneMesh.visible = false;
+    btnSwing.style.display = 'none';
+    game.stats.ab++;
+
+    if (dist >= 122 && Math.abs(spray) < 42) {
+      AudioFX.cheer();
+      game.stats.h++; game.stats.hr++;
+      const sc = advanceRunners(4, false, true);
+      setBanner('HOME RUN!!', `特大號全壘打！飛行距離 ${dist.toFixed(0)} 公尺（+${sc} 分）`);
+      setTicker(`你轟出全壘打！一口氣攻下 ${sc} 分！`);
+      nextBatter();
+    } else if (Math.abs(spray) > 45) {
+      game.stats.ab--;
+      if (game.strikes < 2) game.strikes++;
+      setTicker(`界外球！（${game.balls} 壞 ${game.strikes} 好）`);
+    } else if (la > 26 && dist < 102 && Math.random() < 0.62) {
+      if (!addOut('外野高飛球遭到接殺！')) nextBatter();
+    } else if (la < 14 && dist < 42 && Math.random() < 0.55) {
+      if (!addOut('內野滾地球遭到刺殺！')) nextBatter();
+    } else {
+      AudioFX.cheer();
+      game.stats.h++;
+      const nb = dist > 105 ? 3 : (dist > 82 ? 2 : 1);
+      const sc = advanceRunners(nb, false, true);
+      const label = nb === 3 ? '三壘安打！' : (nb === 2 ? '二壘安打！' : '一壘安打！');
+      setBanner(label, sc > 0 ? `帶有 ${sc} 分打點！上壘準備跑壘` : '漂亮安打上壘！');
+      setTicker(`你擊出${label}${sc > 0 ? ` 貢獻 ${sc} 分打點！` : ''}`);
+      nextBatter();
+    }
+    if (game.subPhase !== 'CHANGE_SIDES' && game.subPhase !== 'OVER') {
+      game.subPhase = 'WATCH_BALL';
+      game.timer = 2.1;
+    }
+    updateGameUI();
+  } else if (err < 2.6) {
+    AudioFX.crack(0.6);
+    if (game.strikes < 2) game.strikes++;
+    setTicker(`擦棒界外！（${game.balls} 壞 ${game.strikes} 好）`);
+    launchVisualBall(25, 42, Math.random() > 0.5 ? 65 : -65, 0.5);
+    game.subPhase = 'WATCH_BALL';
+    game.timer = 1.2;
+    updateGameUI();
+  } else {
+    AudioFX.tone(180, 0.12);
+    game.strikes++;
+    if (game.strikes >= 3) {
+      game.stats.ab++;
+      if (!addOut('揮棒落空！三振出局！')) {
+        nextBatter();
+        enterAfterPause(1.2);
+      }
+    } else {
+      setTicker(`揮棒落空！（${game.balls} 壞 ${game.strikes} 好）`);
+      enterAfterPause(1.0);
+    }
+    updateGameUI();
+  }
+}
+
+function attemptSteal() {
+  if (game.subPhase !== 'OFF_SIM_WAIT' && game.subPhase !== 'OFF_SIM_PITCH') return;
+  if (game.playerBase <= 0 || game.playerBase >= 3 || game.bases[game.playerBase]) return;
+  btnSteal.style.display = 'none';
+  game.stealAttempt = true;
+  game.runProgress = 0;
+  game.runTargetBase = game.playerBase + 1;
+  game.subPhase = 'BASE_STEAL';
+  setTicker(`⚡ 發動盜壘！衝向${['', '', '二', '三'][game.runTargetBase]}壘！`);
+  AudioFX.tone(540, 0.1);
+}
+
+function startInteractiveBaserunning(hitBases) {
+  game.subPhase = 'BASE_RUN';
+  game.runProgress = 0;
+  game.runTargetBase = game.playerBase + 1;
+  game.runSafeTimeout = 2.6 + hitBases * 0.9;
+  holdRun = false;
+  btnSteal.style.display = 'none';
+  btnRun.style.display = 'block';
+  setBanner('隊友安打！', '按住「衝刺 / Space」往下一壘衝！');
+  setTicker(`隊友擊出${hitBases === 2 ? '二壘' : '一壘'}安打！按住衝刺跑壘！`);
+}
+
+function updateBaserunning(dt) {
+  const from = BASES[game.playerBase];
+  const to = BASES[game.runTargetBase % 4];
+  const speed = game.subPhase === 'BASE_STEAL' ? 0.62 : (holdRun ? 0.72 : 0.08);
+  game.runProgress = Math.min(1, game.runProgress + speed * dt);
+
+  const cur = new THREE.Vector3().lerpVectors(from, to, game.runProgress);
+  cur.y = 1.65 + (speed > 0.2 ? Math.sin(performance.now() * 0.022) * 0.09 : 0);
+  camera.position.copy(cur);
+  lookTarget.lerp(new THREE.Vector3(to.x, 1.3, to.z), 0.2);
+  camera.lookAt(lookTarget);
+
+  if (game.subPhase === 'BASE_STEAL') {
+    if (game.runProgress >= 1) {
+      const safe = Math.random() < 0.72;
+      if (safe) {
+        AudioFX.cheer();
+        game.bases[game.playerBase - 1] = false;
+        game.playerBase = game.runTargetBase;
+        game.bases[game.playerBase - 1] = true;
+        setBanner('SAFE!', `盜上${['', '', '二', '三'][game.playerBase]}壘成功！`);
+        enterAfterPause(1.3);
+      } else {
+        AudioFX.tone(170, 0.25);
+        game.bases[game.playerBase - 1] = false;
+        game.playerBase = 0;
+        setBanner('OUT!', '盜壘遭捕手阻殺出局！');
+        if (!addOut('盜壘失敗出局！')) enterAfterPause(1.4);
+      }
+      updateGameUI();
+    }
+    return;
+  }
+
+  game.runSafeTimeout -= dt;
+  if (game.runProgress >= 1) {
+    game.bases[game.playerBase - 1] = false;
+    if (game.runTargetBase >= 4) {
+      AudioFX.cheer();
+      game.playerBase = 0;
+      addRuns(1);
+      setBanner('SCORE!!', '滑回本壘攻下 1 分！');
+      setTicker('你成功跑回本壘得分！');
+      btnRun.style.display = 'none';
+      nextBatter();
+      enterAfterPause(1.6);
+      updateGameUI();
+      return;
+    }
+    game.playerBase = game.runTargetBase;
+    game.bases[game.playerBase - 1] = true;
+    AudioFX.tone(600, 0.12);
+    if (holdRun && game.runSafeTimeout > 0.35 && !game.bases[game.playerBase % 3]) {
+      game.runTargetBase = game.playerBase + 1;
+      game.runProgress = 0;
+      setBanner('繼續衝！', `挑戰直闖${game.runTargetBase === 4 ? '本壘' : '三壘'}！`);
+    } else {
+      btnRun.style.display = 'none';
+      setBanner('SAFE!', `安全上到${['', '一', '二', '三'][game.playerBase]}壘`);
+      nextBatter();
+      enterAfterPause(1.3);
+    }
+    updateGameUI();
+  } else if (game.runSafeTimeout <= 0) {
+    btnRun.style.display = 'none';
+    if (game.runProgress > 0.22) {
+      AudioFX.tone(160, 0.25);
+      game.bases[game.playerBase - 1] = false;
+      game.playerBase = 0;
+      setBanner('OUT!', '外野回傳球到！觸殺出局！');
+      if (!addOut('搶壘遭到觸殺出局！')) {
+        nextBatter();
+        enterAfterPause(1.5);
+      }
+    } else {
+      setBanner('留壘', '選擇穩穩留在原壘包');
+      nextBatter();
+      enterAfterPause(1.1);
+    }
+    updateGameUI();
+  }
+}
+
+function updatePracticeScoreUI() {
+  document.getElementById('stat-ok').textContent = state.ok;
+  document.getElementById('stat-total').textContent = state.total;
+  document.getElementById('stat-streak').textContent = state.streak;
+}
+
+function startPracticePitch() {
+  resultCard.style.display = 'none';
+  startWrap.style.display = 'none';
+  quizControls.style.display = 'none';
+  resetPlayerCF();
+  batterMesh.visible = true;
+  state.meta = generatePlayableBall(state.mode === 'quiz');
+  state.phase = 'PITCHING';
+  state.pitchT = 0; state.flightT = 0; state.quizChoice = null;
+  trailPts.length = 0; trailGeo.setFromPoints([]);
+  ballMesh.visible = true; ballMesh.position.set(0, 1.85, 18.44);
+  ballShadow.visible = false; landingRing.visible = false;
+  setBanner('', '投球中...');
+}
+
+function launchPracticeBall() {
+  const m = state.meta;
+  launchVisualBall(m.ev, m.la, m.spray, m.spin);
+  state.meta = m;
+  AudioFX.crack(THREE.MathUtils.clamp((m.ev - 36) / 12, 0.55, 1.25));
+  state.phase = 'IN_FLIGHT';
+  if (state.showMarker && state.mode === 'chase') {
+    landingRing.position.set(m.land.x, 0.08, m.land.z);
+    landingRing.visible = true;
+  }
+  setBanner('', state.mode === 'quiz' ? '看球！準備判斷前還是後...' : '');
+}
+
+function submitQuiz(choice) {
+  if (state.phase !== 'QUIZ_WAIT') return;
+  state.quizChoice = choice;
+  quizControls.style.display = 'none';
+  setBanner(choice === 'front' ? '你選：往前衝！' : '你選：往後退！', '揭曉真實落點...');
+  landingRing.position.set(state.meta.land.x, 0.08, state.meta.land.z);
+  landingRing.visible = true;
+  state.phase = 'IN_FLIGHT';
+}
+
+function finishPracticePlay(outcome, title, sub, color) {
+  state.phase = 'RESULT';
+  state.total++;
+  if (outcome) { state.ok++; state.streak++; } else state.streak = 0;
+  updatePracticeScoreUI();
+  const m = state.meta;
+  document.getElementById('result-title').textContent = title;
+  document.getElementById('result-title').style.color = color;
+  document.getElementById('result-sub').textContent = sub;
+  document.getElementById('st-ev').textContent = `${(m.ev * 3.6).toFixed(1)} km/h`;
+  document.getElementById('st-la').textContent = `${m.la.toFixed(1)}°`;
+  document.getElementById('st-dist').textContent = `${m.dist.toFixed(1)} m`;
+  document.getElementById('st-hang').textContent = `${m.hang.toFixed(2)} s`;
+  document.getElementById('st-delta').textContent = m.deltaZ < 0
+    ? `站位前方 ${Math.abs(m.deltaZ).toFixed(1)} 公尺（往前衝）`
+    : `站位後方 ${Math.abs(m.deltaZ).toFixed(1)} 公尺（往後退）`;
+  document.getElementById('btn-next').textContent = '下一球（Space）';
+  setBanner('', '');
+  resultCard.style.display = 'block';
+}
+
+function switchMode(newMode) {
+  state.mode = newMode;
+  game.active = false;
+  state.phase = 'IDLE';
+  hideAllActionUI();
   resultCard.style.display = 'none';
   quizControls.style.display = 'none';
   startWrap.style.display = 'block';
-  state.phase = 'IDLE';
-  resetPlayer();
-};
+  ballMesh.visible = false; ballShadow.visible = false;
+  trailPts.length = 0; trailGeo.setFromPoints([]);
+
+  ['mode-game', 'mode-chase', 'mode-quiz'].forEach(id => document.getElementById(id).classList.remove('active'));
+  document.getElementById(`mode-${newMode}`).classList.add('active');
+
+  if (newMode === 'game') {
+    gameBug.style.display = 'block';
+    practiceScore.style.display = 'none';
+    ticker.style.display = 'none';
+    document.getElementById('btn-start').textContent = 'PLAY BALL！（Space）';
+    setBanner('3棒 中外野手', '完整九局第一人稱比賽｜守備・休息室・打擊・跑壘');
+    resetPlayerCF();
+    updateGameUI();
+  } else {
+    gameBug.style.display = 'none';
+    practiceScore.style.display = 'flex';
+    ticker.style.display = 'none';
+    document.getElementById('btn-start').textContent = '投球（Space）';
+    if (newMode === 'chase') {
+      touchControls.style.display = 'block';
+      setBanner('實戰追接模式', '靠視線與聲音判斷落點，跑位接殺飛球');
+    } else {
+      setBanner('這顆飛球，前？後？', '擊球後 1.15 秒瞬間判斷往前衝還是往後退');
+    }
+    resetPlayerCF();
+  }
+}
+
+document.getElementById('mode-game').onclick = () => switchMode('game');
+document.getElementById('mode-chase').onclick = () => switchMode('chase');
+document.getElementById('mode-quiz').onclick = () => switchMode('quiz');
+document.getElementById('btn-start').onclick = () => state.mode === 'game' ? startGameMode() : startPracticePitch();
+document.getElementById('btn-next').onclick = () => state.mode === 'game' ? startGameMode() : startPracticePitch();
+document.getElementById('btn-front').onclick = () => submitQuiz('front');
+document.getElementById('btn-back').onclick = () => submitQuiz('back');
 
 document.getElementById('toggle-marker').onclick = e => {
   state.showMarker = !state.showMarker;
   e.target.textContent = `落點：${state.showMarker ? '開' : '關'}`;
   e.target.classList.toggle('active', state.showMarker);
-  if (state.phase === 'IN_FLIGHT' && state.mode === 'chase') {
-    landingRing.visible = state.showMarker;
-    if (state.showMarker) landingRing.position.set(state.meta.land.x, 0.08, state.meta.land.z);
-  }
 };
-
-document.getElementById('btn-pitch').onclick = startPitch;
-document.getElementById('btn-next').onclick = startPitch;
-document.getElementById('btn-front').onclick = () => submitQuiz('front');
-document.getElementById('btn-back').onclick = () => submitQuiz('back');
+document.getElementById('btn-speed').onclick = e => {
+  state.speed = state.speed === 1 ? 2 : 1;
+  e.target.textContent = `${state.speed}x`;
+  e.target.classList.toggle('active', state.speed === 2);
+};
 
 window.addEventListener('resize', () => {
   camera.aspect = window.innerWidth / window.innerHeight;
@@ -880,9 +1476,56 @@ window.addEventListener('resize', () => {
   renderer.setSize(window.innerWidth, window.innerHeight);
 });
 
+const minimap = document.getElementById('minimap');
+const mctx = minimap.getContext('2d');
+function drawMinimap() {
+  const w = minimap.width, h = minimap.height;
+  mctx.clearRect(0, 0, w, h);
+  const ox = w / 2, oy = h - 16, scale = 1.12;
+  mctx.beginPath();
+  mctx.moveTo(ox, oy);
+  mctx.arc(ox, oy, 122 * scale, -Math.PI * 0.75, -Math.PI * 0.25);
+  mctx.closePath();
+  mctx.fillStyle = 'rgba(56, 142, 60, 0.45)'; mctx.fill();
+  mctx.strokeStyle = 'rgba(255,255,255,0.45)'; mctx.lineWidth = 2; mctx.stroke();
+
+  const px = ox - player.pos.x * scale, pz = oy - player.pos.z * scale;
+  if (state.mode !== 'game' || game.half === 'top') {
+    mctx.fillStyle = '#29b6f6';
+    mctx.beginPath(); mctx.arc(px, pz, 5, 0, Math.PI * 2); mctx.fill();
+  }
+  if (landingRing.visible && state.meta && state.meta.land) {
+    mctx.strokeStyle = '#ffeb3b'; mctx.lineWidth = 2.5;
+    mctx.beginPath(); mctx.arc(ox - state.meta.land.x * scale, oy - state.meta.land.z * scale, 6, 0, Math.PI * 2); mctx.stroke();
+  }
+  if (ballMesh.visible) {
+    mctx.fillStyle = '#ffffff';
+    mctx.beginPath(); mctx.arc(ox - ballMesh.position.x * scale, oy - ballMesh.position.z * scale, 3.5, 0, Math.PI * 2); mctx.fill();
+  }
+}
+
+function updateCFMovement(dt, now) {
+  if (player.diving) {
+    player.diveTimer -= dt;
+    const speed = 10.6 * Math.max(player.diveTimer / 0.52, 0.15);
+    player.pos.addScaledVector(player.diveDir, speed * dt);
+    player.pos.y = 0.72 + 0.55 * Math.sin((player.diveTimer / 0.52) * Math.PI);
+    if (player.diveTimer <= 0) { player.diving = false; player.pos.y = 1.7; }
+  } else {
+    const input = getMoveInput();
+    const maxSpeed = input.z > 0.3 ? 7.6 : 8.6;
+    player.vel.lerp(input.multiplyScalar(maxSpeed), Math.min(1, dt * 8.5));
+    player.pos.addScaledVector(player.vel, dt);
+    player.pos.y = 1.7 + Math.sin(now * 0.018) * (player.vel.length() * 0.012);
+  }
+  const r = Math.hypot(player.pos.x, player.pos.z);
+  if (r > wallRadius - 1.2) { player.pos.x *= (wallRadius - 1.2) / r; player.pos.z *= (wallRadius - 1.2) / r; }
+  if (player.pos.z < 36) player.pos.z = 36;
+  camera.position.copy(player.pos);
+}
+
 const lookTarget = new THREE.Vector3(0, 2.2, 0);
-let lastTime = performance.now();
-let accum = 0;
+let lastTime = performance.now(), accum = 0;
 const FIXED_DT = 1 / 120;
 
 function animate(now) {
@@ -890,122 +1533,179 @@ function animate(now) {
   const dt = Math.min((now - lastTime) / 1000, 0.05);
   lastTime = now;
 
-  if (state.phase === 'PITCHING') {
-    state.pitchT += dt;
-    const p = Math.min(state.pitchT / 0.48, 1);
-    ballMesh.position.set(0, 1.85 - p * 0.8, 18.44 * (1 - p) + 0.3);
-    ballMesh.scale.setScalar(2.4);
-    lookTarget.lerp(new THREE.Vector3(0, 1.6, 0), 0.15);
-    camera.lookAt(lookTarget);
-    if (p >= 1) launchBall();
-  } else if (state.phase === 'IN_FLIGHT') {
-    if (state.mode === 'chase') {
-      if (player.diving) {
-        player.diveTimer -= dt;
-        const speed = 10.6 * Math.max(player.diveTimer / 0.52, 0.15);
-        player.pos.addScaledVector(player.diveDir, speed * dt);
-        player.pos.y = 0.72 + 0.55 * Math.sin((player.diveTimer / 0.52) * Math.PI);
-        if (player.diveTimer <= 0) {
-          player.diving = false;
-          player.pos.y = 1.7;
-        }
-      } else {
-        const input = getMoveInput();
-        const maxSpeed = input.z > 0.3 ? 7.6 : 8.5;
-        const targetVel = input.multiplyScalar(maxSpeed);
-        player.vel.lerp(targetVel, Math.min(1, dt * 8.5));
-        player.pos.addScaledVector(player.vel, dt);
-        player.pos.y = 1.7 + Math.sin(now * 0.018) * (player.vel.length() * 0.012);
+  if (state.mode === 'game' && game.active) {
+    if (game.subPhase === 'CHANGE_SIDES' || game.subPhase === 'PAUSE_NEXT') {
+      game.timer -= dt;
+      if (game.timer <= 0) enterCurrentRole();
+    } else if (game.subPhase === 'DEF_WAIT' || game.subPhase === 'OFF_SIM_WAIT') {
+      if (game.subPhase === 'DEF_WAIT') {
+        updateCFMovement(dt, now);
+        lookTarget.lerp(new THREE.Vector3(0, 1.8, 0), 0.12);
+        camera.lookAt(lookTarget);
       }
-      const r = Math.hypot(player.pos.x, player.pos.z);
-      if (r > wallRadius - 1.2) {
-        player.pos.x *= (wallRadius - 1.2) / r;
-        player.pos.z *= (wallRadius - 1.2) / r;
-      }
-      if (player.pos.z < 36) player.pos.z = 36;
-    }
-
-    accum += dt;
-    while (accum >= FIXED_DT && state.phase === 'IN_FLIGHT') {
-      stepPhysics(state.ballPos, state.ballVel, state.meta.spin, FIXED_DT);
-      state.flightT += FIXED_DT;
-      accum -= FIXED_DT;
-
-      if (state.mode === 'quiz' && !state.quizChoice && state.flightT >= 1.15) {
-        state.phase = 'QUIZ_WAIT';
-        quizControls.style.display = 'flex';
-        bannerTitle.textContent = '這顆飛球，前？後？';
-        bannerSub.textContent = '立刻選擇！';
-        break;
-      }
-
-      if (state.mode === 'chase') {
+      game.timer -= dt;
+      if (game.timer <= 0) launchSimPitch(game.subPhase === 'DEF_WAIT');
+    } else if (game.subPhase === 'DEF_PITCH' || game.subPhase === 'OFF_SIM_PITCH') {
+      if (game.subPhase === 'DEF_PITCH') updateCFMovement(dt, now);
+      state.pitchT += dt * state.speed;
+      const p = Math.min(state.pitchT / 0.48, 1);
+      ballMesh.position.set(0, 1.85 - p * 0.8, 18.44 * (1 - p) + 0.3);
+      ballMesh.scale.setScalar(game.subPhase === 'DEF_PITCH' ? 2.4 : 1.3);
+      lookTarget.lerp(ballMesh.position, 0.2);
+      camera.lookAt(lookTarget);
+      if (p >= 1) resolveSimPitch(game.subPhase === 'DEF_PITCH');
+    } else if (game.subPhase === 'DEF_CF_PLAY') {
+      updateCFMovement(dt, now);
+      accum += dt;
+      while (accum >= FIXED_DT && game.subPhase === 'DEF_CF_PLAY') {
+        stepPhysics(state.ballPos, state.ballVel, state.meta.spin, FIXED_DT);
+        accum -= FIXED_DT;
         const horiz = Math.hypot(state.ballPos.x - player.pos.x, state.ballPos.z - player.pos.z);
         const reach = player.diving ? 2.85 : 2.15;
         if (horiz <= reach && state.ballPos.y <= 2.65 && state.ballPos.y >= 0.15 && state.ballVel.y < 0) {
-          AudioFX.glovePop();
-          AudioFX.tone(660, 0.22);
-          const msg = player.diving ? '美技撲接接殺！' : '穩穩接殺出局！';
-          const sub = player.diving ? '全場起立鼓掌的五星級守備！' : `距離落點偏差 ${horiz.toFixed(2)} 公尺`;
-          finishPlay(true, msg, sub, '#66bb6a');
+          AudioFX.glovePop(); AudioFX.cheer();
+          game.stats.po++;
+          landingRing.visible = false;
+          setBanner(player.diving ? '美技撲接！' : '接殺出局！', '');
+          if (!addOut(player.diving ? '中外野五星級撲接接殺！' : '中外野飛球穩穩接殺出局！')) {
+            nextBatter();
+            enterAfterPause(1.5);
+          }
+          break;
+        }
+        if (state.ballPos.y <= 0.11) {
+          state.ballPos.y = 0.11;
+          AudioFX.thud();
+          landingRing.visible = false;
+          const miss = Math.hypot(state.ballPos.x - player.pos.x, state.ballPos.z - player.pos.z);
+          const nb = state.ballPos.z > player.pos.z + 3 || miss > 12 ? 2 : 1;
+          const sc = advanceRunners(nb, false, false);
+          setBanner(nb === 2 ? '長打落地！' : '安打落地！', `距離差 ${miss.toFixed(1)} 公尺${sc > 0 ? `｜失 ${sc} 分` : ''}`);
+          setTicker(`中外野${nb === 2 ? '二壘安打' : '一壘安打'}！${sc > 0 ? ` 客隊得 ${sc} 分` : ''}`);
+          nextBatter();
+          enterAfterPause(1.7);
           break;
         }
       }
-
-      if (state.ballPos.y <= 0.11) {
-        state.ballPos.y = 0.11;
-        AudioFX.thud();
-        if (state.mode === 'quiz') {
-          const correct = state.meta.deltaZ < 0 ? 'front' : 'back';
-          const isRight = state.quizChoice === correct;
-          if (isRight) AudioFX.tone(720, 0.22);
-          else AudioFX.tone(180, 0.28);
-          finishPlay(
-            isRight,
-            isRight ? '判斷正確！' : '判斷失誤！',
-            `正確方向：${correct === 'front' ? '往前衝（前）' : '往後退（後）'}`,
-            isRight ? '#66bb6a' : '#ef5350'
-          );
-        } else {
-          const missDist = Math.hypot(state.ballPos.x - player.pos.x, state.ballPos.z - player.pos.z);
-          const overHead = state.ballPos.z > player.pos.z + 2;
-          finishPlay(
-            false,
-            overHead ? '越過頭頂長打！' : '落地安打！',
-            `球落地時距離你 ${missDist.toFixed(1)} 公尺`,
-            '#ef5350'
-          );
+      ballMesh.position.copy(state.ballPos);
+      ballMesh.scale.setScalar(THREE.MathUtils.clamp(camera.position.distanceTo(state.ballPos) * 0.026, 1.0, 2.8));
+      ballShadow.position.set(state.ballPos.x, 0.07, state.ballPos.z);
+      lookTarget.lerp(state.ballPos, 0.22);
+      camera.lookAt(lookTarget);
+    } else if (game.subPhase === 'BAT_WAIT') {
+      game.timer -= dt;
+      if (game.timer <= 0) launchPlayerAtBatPitch();
+    } else if (game.subPhase === 'BAT_PITCH') {
+      state.pitchT += dt;
+      const p = Math.min(state.pitchT / game.pitchDur, 1);
+      const t = game.pitchTarget;
+      const arcY = Math.sin(p * Math.PI) * 0.25;
+      ballMesh.position.set(t.x * p, 1.85 + (t.y - 1.85) * p + arcY, 18.44 * (1 - p) + t.z * p);
+      ballMesh.scale.setScalar(1.15);
+      if (p >= 1) {
+        if (!game.pitchSwung) {
+          AudioFX.glovePop();
+          if (game.pitchIsStrike) {
+            game.strikes++;
+            if (game.strikes >= 3) {
+              game.stats.ab++;
+              if (!addOut('好球沒揮棒！遭到三振出局！')) { nextBatter(); enterAfterPause(1.2); }
+            } else { setTicker(`好球進壘！（${game.balls} 壞 ${game.strikes} 好）`); enterAfterPause(0.95); }
+          } else {
+            game.balls++;
+            if (game.balls >= 4) {
+              AudioFX.cheer();
+              game.stats.bb++;
+              advanceRunners(1, true, true);
+              setBanner('BALL FOUR!', '選到四壞球保送上一壘！');
+              setTicker('選球漂亮！四壞球保送上一壘');
+              nextBatter();
+              enterAfterPause(1.4);
+            } else { setTicker(`壞球！選得好（${game.balls} 壞 ${game.strikes} 好）`); enterAfterPause(0.95); }
+          }
+          updateGameUI();
         }
-        break;
       }
+    } else if (game.subPhase === 'WATCH_BALL') {
+      if (state.ballPos.y > 0.12) {
+        stepPhysics(state.ballPos, state.ballVel, state.meta ? state.meta.spin : 0.8, dt);
+        if (state.ballPos.y < 0.11) state.ballPos.y = 0.11;
+        ballMesh.position.copy(state.ballPos);
+        ballMesh.scale.setScalar(THREE.MathUtils.clamp(camera.position.distanceTo(state.ballPos) * 0.024, 1.0, 2.5));
+        ballShadow.position.set(state.ballPos.x, 0.07, state.ballPos.z);
+        lookTarget.lerp(state.ballPos, 0.16);
+        camera.lookAt(lookTarget);
+      }
+      game.timer -= dt;
+      if (game.timer <= 0) enterCurrentRole();
+    } else if (game.subPhase === 'BASE_RUN' || game.subPhase === 'BASE_STEAL') {
+      updateBaserunning(dt);
     }
-
-    ballMesh.position.copy(state.ballPos);
-    const camDist = camera.position.distanceTo(state.ballPos);
-    const visScale = THREE.MathUtils.clamp(camDist * 0.026, 1.0, 2.8);
-    ballMesh.scale.setScalar(visScale);
-
-    ballShadow.position.set(state.ballPos.x, 0.07, state.ballPos.z);
-    const shScale = THREE.MathUtils.clamp(1.6 - state.ballPos.y * 0.035, 0.35, 1.5);
-    ballShadow.scale.setScalar(shScale);
-
-    if (state.mode === 'quiz' && state.quizChoice) {
-      trailPts.push(state.ballPos.clone());
-      trailGeo.setFromPoints(trailPts);
+  } else if (state.mode !== 'game') {
+    if (state.phase === 'PITCHING') {
+      state.pitchT += dt;
+      const p = Math.min(state.pitchT / 0.48, 1);
+      ballMesh.position.set(0, 1.85 - p * 0.8, 18.44 * (1 - p) + 0.3);
+      ballMesh.scale.setScalar(2.4);
+      lookTarget.lerp(new THREE.Vector3(0, 1.6, 0), 0.15);
+      camera.lookAt(lookTarget);
+      if (p >= 1) launchPracticeBall();
+    } else if (state.phase === 'IN_FLIGHT') {
+      if (state.mode === 'chase') updateCFMovement(dt, now);
+      accum += dt;
+      while (accum >= FIXED_DT && state.phase === 'IN_FLIGHT') {
+        stepPhysics(state.ballPos, state.ballVel, state.meta.spin, FIXED_DT);
+        state.flightT += FIXED_DT;
+        accum -= FIXED_DT;
+        if (state.mode === 'quiz' && !state.quizChoice && state.flightT >= 1.15) {
+          state.phase = 'QUIZ_WAIT';
+          quizControls.style.display = 'flex';
+          setBanner('這顆飛球，前？後？', '立刻選擇！');
+          break;
+        }
+        if (state.mode === 'chase') {
+          const horiz = Math.hypot(state.ballPos.x - player.pos.x, state.ballPos.z - player.pos.z);
+          const reach = player.diving ? 2.85 : 2.15;
+          if (horiz <= reach && state.ballPos.y <= 2.65 && state.ballPos.y >= 0.15 && state.ballVel.y < 0) {
+            AudioFX.glovePop(); AudioFX.tone(660, 0.22);
+            finishPracticePlay(true, player.diving ? '美技撲接接殺！' : '穩穩接殺出局！', `落點偏差 ${horiz.toFixed(2)} 公尺`, '#66bb6a');
+            break;
+          }
+        }
+        if (state.ballPos.y <= 0.11) {
+          state.ballPos.y = 0.11;
+          AudioFX.thud();
+          if (state.mode === 'quiz') {
+            const correct = state.meta.deltaZ < 0 ? 'front' : 'back';
+            const ok = state.quizChoice === correct;
+            AudioFX.tone(ok ? 720 : 180, 0.22);
+            finishPracticePlay(ok, ok ? '判斷正確！' : '判斷失誤！', `正確方向：${correct === 'front' ? '往前衝（前）' : '往後退（後）'}`, ok ? '#66bb6a' : '#ef5350');
+          } else {
+            const miss = Math.hypot(state.ballPos.x - player.pos.x, state.ballPos.z - player.pos.z);
+            finishPracticePlay(false, state.ballPos.z > player.pos.z + 2 ? '越過頭頂長打！' : '落地安打！', `落地距離差 ${miss.toFixed(1)} 公尺`, '#ef5350');
+          }
+          break;
+        }
+      }
+      ballMesh.position.copy(state.ballPos);
+      ballMesh.scale.setScalar(THREE.MathUtils.clamp(camera.position.distanceTo(state.ballPos) * 0.026, 1.0, 2.8));
+      ballShadow.position.set(state.ballPos.x, 0.07, state.ballPos.z);
+      if (state.mode === 'quiz' && state.quizChoice) {
+        trailPts.push(state.ballPos.clone());
+        trailGeo.setFromPoints(trailPts);
+      }
+      lookTarget.lerp(state.ballPos, 0.22);
+      camera.lookAt(lookTarget);
+    } else if (state.phase === 'QUIZ_WAIT') {
+      camera.lookAt(lookTarget);
     }
-
-    camera.position.copy(player.pos);
-    lookTarget.lerp(state.ballPos, 0.22);
-    camera.lookAt(lookTarget);
-  } else if (state.phase === 'QUIZ_WAIT') {
-    camera.lookAt(lookTarget);
   }
 
   drawMinimap();
   renderer.render(scene, camera);
 }
 
-resetPlayer();
+switchMode('game');
 requestAnimationFrame(animate);
 </script>
 </body>
