@@ -1153,7 +1153,7 @@ function generateBattedBallParams() {
   } else if (r < 0.34) {
     // 車布邊安打（貼著一、三壘線滾過去）
     const sign = Math.random() > 0.5 ? 1 : -1;
-    return { ev: 36 + Math.random() * 7, la: 2 + Math.random() * 5, spray: sign * (39.5 + Math.random() * 4.2), spin: 0.25, tag: '車布邊' };
+return { ev: 44 + Math.random() * 6, la: 1 + Math.random() * 3, spray: sign * (42.8 + Math.random() * 1.8), spin: 0.15, tag: '車布邊' };
   } else if (r < 0.54) {
     // 平飛球 / 淺外野安打
     return { ev: 36 + Math.random() * 9, la: 11 + Math.random() * 9, spray: Math.random() * 68 - 34, spin: 0.9, tag: '' };
@@ -1433,8 +1433,9 @@ function updateLivePlay(dt, now) {
       if (!pl.landed && bDist <= f.reach && state.ballPos.y <= 2.6 && state.ballPos.y >= 0.15 && state.ballVel.y < 0) {
         handleFlyOut(f.id, false);
       } else if (pl.landed && bDist <= (f.type === 'IF' ? 1.8 : 2.2) && state.ballPos.y < 1.6) {
-        handleAIFieldGroundBall(f);
-      }
+  if (pl.tag === '車布邊' && f.type === 'IF') return;
+  handleAIFieldGroundBall(f);
+}
     });
   } else if (player.hasBall) {
     ballMesh.position.set(player.pos.x, player.pos.y - 0.25, player.pos.z - 0.4);
