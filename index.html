@@ -562,7 +562,7 @@ function resetFielders(hideCF = false, teamColor = 0x1565c0) {
 }
 
 const staticRunners = [1, 2, 3].map(b => {
-  const m = createPlayerSilhouette(BASES[b].x, BASES[b].z, 0xffca28);
+  const m = createPlayerSilhouette(BASES[b].x, BASES[b].z, 0x1565c0);
   m.visible = false;
   return m;
 });
@@ -578,7 +578,7 @@ function isPlayerDefense() {
 function isPlayerOffense() { return !isPlayerDefense(); }
 
 function syncStaticRunners() {
-  const color = isPlayerDefense() ? 0xc62828 : 0xffca28;
+  const color = isPlayerDefense() ? 0xc62828 : 0x1565c0;
   for (let i = 0; i < 3; i++) {
     const isMeHere = isPlayerOffense() && game.playerBase === i + 1;
     staticRunners[i].visible = game.bases[i] && !isMeHere && liveRunners.length === 0;
@@ -727,7 +727,7 @@ window.addEventListener('keydown', e => {
       if (!game.active) startGameMode();
       else if (game.subPhase === 'BAT_PITCH') swingBat();
       else if (game.subPhase === 'LIVE_PLAY' && isPlayerDefense()) handleDefenseAction();
-      else if (game.subPhase === 'LIVE_PLAY' && isPlayerOffense() && game.playerBase > 0) holdRun = true;
+      else if (game.subPhase === 'LIVE_PLAY' && isPlayerOffense() && (game.playerBase > 0 || (game.play && game.play.isMeBatting))) holdRun = true;
       else if (game.subPhase === 'BASE_TAGUP') holdRun = true;
     } else {
       if (state.phase === 'IDLE' || state.phase === 'RESULT') startPracticePitch();
@@ -1185,7 +1185,7 @@ function generateBattedBallParams() {
 
 function spawnLiveRunners(isMeBatting) {
   clearLiveRunners();
-  const color = isPlayerDefense() ? 0xc62828 : 0xffca28;
+  const color = isPlayerDefense() ? 0xc62828 : 0x1565c0;
   for (let i = 2; i >= 0; i--) {
     if (game.bases[i]) {
       const isMe = (isPlayerOffense() && game.playerBase === i + 1);
@@ -1225,7 +1225,9 @@ function startLiveBallInPlay(ev, la, spray, spin, isMeBatting = false, tag = '')
   }
 
   spawnLiveRunners(isMeBatting);
-  if (isPlayerOffense() && game.playerBase > 0) {
+  batterMesh.visible = false;
+
+  if (isPlayerOffense() && (game.playerBase > 0 || isMeBatting)) {
     btnSteal.style.display = 'none';
     btnRun.style.display = 'block';
     holdRun = false;
@@ -1363,7 +1365,6 @@ function updateFieldersAndCoverage(dt) {
   const ballInOutfield = state.ballPos.z > 46 || state.meta.land.z > 50;
   const cutoffId = state.ballPos.x >= 0 ? 'SS' : '2B';
 
-  // 找出誰是主要追球者
   let primaryChaser = null;
   if (!pl.fielded) {
     let bestDist = Infinity;
@@ -1379,7 +1380,6 @@ function updateFieldersAndCoverage(dt) {
     });
   }
 
-  // 一壘手是否離開一壘太遠（若是，投手補位一壘！）
   const f1B = getFielderById('1B');
   const needPitcherCover1B = (primaryChaser === f1B || pl.fielderId === '1B') || Math.hypot(f1B.pos.x - BASES[1].x, f1B.pos.z - BASES[1].z) > 6;
   if (needPitcherCover1B) {
@@ -1399,11 +1399,9 @@ function updateFieldersAndCoverage(dt) {
       moveObjToward(f.pos, BASES[3], f.speed, dt);
     } else if (f.id === 'SS' || f.id === '2B') {
       if (ballInOutfield && f.id === cutoffId) {
-        // 咖抖內野手移往外野與內野中間的轉傳點
         const cutPos = new THREE.Vector3(THREE.MathUtils.clamp(state.ballPos.x * 0.48, -22, 22), 0, 52);
         moveObjToward(f.pos, cutPos, f.speed, dt);
       } else {
-        // 另一位二游補位二壘壘包
         moveObjToward(f.pos, BASES[2], f.speed, dt);
       }
     }
@@ -1429,10 +1427,8 @@ function updateLivePlay(dt, now) {
     return;
   }
 
-  // 全員守備與補位移動
   updateFieldersAndCoverage(dt);
 
-  // 接球後墊步出手的停頓時間
   if (pl.throwDelay > 0) {
     pl.throwDelay -= dt;
     if (pl.pendingFromPlayer) {
@@ -1540,7 +1536,7 @@ function updateLivePlay(dt, now) {
     if (r.out || r.scored || r.stopped) return;
 
     if (r.baseFrom >= 1 && !r.retreating) {
-      if (r.isMe && isPlayerOffense() && !pl.isMeBatting) {
+      if (r.isMe && isPlayerOffense()) {
         if (!holdRun && r.progress > 0.03 && r.progress < 0.5) r.retreating = true;
       } else {
         if ((pl.fielded || pl.throwActive) && r.progress < 0.48) r.retreating = true;
@@ -1550,7 +1546,7 @@ function updateLivePlay(dt, now) {
     if (r.retreating) {
       r.progress -= r.speed * 1.2 * dt;
       const cur = new THREE.Vector3().lerpVectors(BASES[r.baseFrom % 4], BASES[r.baseTo % 4], Math.max(0, r.progress));
-      if (r.isMe && isPlayerOffense() && !pl.isMeBatting) {
+      if (r.isMe && isPlayerOffense()) {
         cur.y = 1.65;
         camera.position.copy(cur);
         lookTarget.lerp(BASES[r.baseFrom % 4].clone().setY(1.2), 0.2);
@@ -1567,11 +1563,11 @@ function updateLivePlay(dt, now) {
       return;
     }
 
-    if (r.isMe && isPlayerOffense() && !pl.isMeBatting) {
-      const spd = holdRun ? 0.34 : 0.0;
+    if (r.isMe && isPlayerOffense()) {
+      const spd = (r.baseFrom === 0 || holdRun) ? 0.32 : 0.0;
       r.progress += spd * dt;
       const cur = new THREE.Vector3().lerpVectors(BASES[r.baseFrom % 4], BASES[r.baseTo % 4], Math.min(1, r.progress));
-      cur.y = 1.65 + (holdRun ? Math.sin(now * 0.022) * 0.08 : 0);
+      cur.y = 1.65 + (spd > 0 ? Math.sin(now * 0.022) * 0.08 : 0);
       camera.position.copy(cur);
       lookTarget.lerp(BASES[r.baseTo % 4].clone().setY(1.2), 0.18);
       camera.lookAt(lookTarget);
@@ -1600,7 +1596,7 @@ function updateLivePlay(dt, now) {
     }
   });
 
-  if (isPlayerDefense() || !(isPlayerOffense() && game.playerBase > 0 && !pl.isMeBatting)) {
+  if (isPlayerDefense() || !(isPlayerOffense() && (game.playerBase > 0 || pl.isMeBatting))) {
     lookTarget.lerp(ballMesh.position, 0.2);
     camera.lookAt(lookTarget);
   }
@@ -1678,7 +1674,6 @@ function resolveThrowArrival() {
   const pl = game.play;
   pl.throwActive = false;
 
-  // 1. 剛傳到咖抖內野手，停頓一下再轉傳目標壘包
   if (pl.relayActive) {
     pl.relayActive = false;
     const tb = pl.relayFinalBase;
@@ -1703,7 +1698,6 @@ function resolveThrowArrival() {
     }
   });
 
-  // 2. 內野雙殺轉傳一壘（加上轉身停頓）
   if (pl.dpSecondThrow && tb === 2 && gotOut) {
     pl.dpSecondThrow = false;
     const cover2B = getFielderById(pl.fielderId === 'SS' ? '2B' : 'SS');
