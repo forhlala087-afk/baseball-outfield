@@ -115,9 +115,9 @@
 
   #ticker {
     position: fixed; top: calc(max(10px, env(safe-area-inset-top)) + 166px); left: 50%; transform: translateX(-50%);
-    background: rgba(10, 18, 30, 0.82); border: 1px solid rgba(255,255,255,0.18);
+    background: rgba(10, 18, 30, 0.84); border: 1px solid rgba(255,255,255,0.18);
     border-radius: 99px; padding: 5px 14px; font-size: 13px; font-weight: 700; color: #fff;
-    z-index: 12; pointer-events: none; display: none; max-width: 92vw; text-align: center;
+    z-index: 12; pointer-events: none; display: none; max-width: 94vw; text-align: center;
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   }
 
@@ -468,8 +468,6 @@ BASES.forEach(p => {
 });
 
 const ONDECK_POS = new THREE.Vector3(-16.5, 1.65, 2.0);
-const DUGOUT_POS = new THREE.Vector3(-27.5, 1.45, 9.5);
-
 const onDeckCircle = new THREE.Mesh(
   new THREE.RingGeometry(0.95, 1.45, 24),
   new THREE.MeshBasicMaterial({ color: 0x1565c0, side: THREE.DoubleSide })
@@ -478,18 +476,28 @@ onDeckCircle.rotation.x = -Math.PI / 2;
 onDeckCircle.position.set(ONDECK_POS.x, 0.06, ONDECK_POS.z);
 scene.add(onDeckCircle);
 
+// 平行於一壘界外線與觀眾席的休息室
 const dugoutGroup = new THREE.Group();
-const dgRoof = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.25, 15), new THREE.MeshLambertMaterial({ color: 0x263238 }));
-dgRoof.position.set(-28.0, 2.65, 9.2);
-dgRoof.rotation.y = Math.PI / 4;
-const dgRail = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.08, 14.5), new THREE.MeshLambertMaterial({ color: 0x90a4ae }));
-dgRail.position.set(-26.3, 1.05, 8.2);
-dgRail.rotation.y = Math.PI / 4;
-const dgWall = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.9, 14.5), new THREE.MeshLambertMaterial({ color: 0x37474f }));
-dgWall.position.set(-26.4, 0.45, 8.2);
-dgWall.rotation.y = Math.PI / 4;
-dugoutGroup.add(dgRoof, dgRail, dgWall);
+const dgRoof = new THREE.Mesh(new THREE.BoxGeometry(2.8, 0.22, 16), new THREE.MeshLambertMaterial({ color: 0x1f2d3a }));
+dgRoof.position.set(-0.3, 2.55, 0);
+const dgBack = new THREE.Mesh(new THREE.BoxGeometry(0.25, 2.5, 16), new THREE.MeshLambertMaterial({ color: 0x16222c }));
+dgBack.position.set(-1.6, 1.25, 0);
+const dgBench = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.45, 14.5), new THREE.MeshLambertMaterial({ color: 0x455a64 }));
+dgBench.position.set(-0.9, 0.25, 0);
+const dgWall = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.85, 15.8), new THREE.MeshLambertMaterial({ color: 0x14452f }));
+dgWall.position.set(1.05, 0.42, 0);
+const dgRail = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.08, 15.8), new THREE.MeshLambertMaterial({ color: 0xb0bec5 }));
+dgRail.position.set(1.05, 1.12, 0);
+dugoutGroup.add(dgRoof, dgBack, dgBench, dgWall, dgRail);
+for (let z = -7; z <= 7; z += 2.33) {
+  const post = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.3, 0.08), new THREE.MeshLambertMaterial({ color: 0x90a4ae }));
+  post.position.set(1.05, 0.98, z);
+  dugoutGroup.add(post);
+}
+dugoutGroup.position.set(-22.5, 0, 5.5);
+dugoutGroup.rotation.y = -Math.PI / 4;
 scene.add(dugoutGroup);
+const DUGOUT_POS = new THREE.Vector3(-22.3, 1.48, 5.7);
 
 function addFoulLine(sign) {
   const line = new THREE.Mesh(new THREE.PlaneGeometry(0.22, 122), new THREE.MeshBasicMaterial({ color: 0xffffff }));
@@ -643,6 +651,11 @@ const game = {
   runProgress: 0,
   runTargetBase: 0,
   runSafeTimeout: 0,
+  runHitBases: 1,
+  runInitialBases: [false, false, false],
+  runInitialPlayerBase: 0,
+  tagBallCaught: false,
+  tagThrowTimer: 0,
   stats: { ab: 0, h: 0, hr: 0, bb: 0, rbi: 0, po: 0 }
 };
 
@@ -657,7 +670,7 @@ window.addEventListener('keydown', e => {
       if (!game.active) startGameMode();
       else if (game.subPhase === 'BAT_PITCH') swingBat();
       else if (game.subPhase === 'DEF_CF_PLAY') triggerDive();
-      else if (game.subPhase === 'BASE_RUN') holdRun = true;
+      else if (game.subPhase === 'BASE_RUN' || game.subPhase === 'BASE_TAGUP') holdRun = true;
     } else {
       if (state.phase === 'IDLE' || state.phase === 'RESULT') startPracticePitch();
       else if (state.phase === 'IN_FLIGHT' && state.mode === 'chase') triggerDive();
@@ -896,8 +909,8 @@ function nextBatter() {
   else game.homeOrder = (game.homeOrder % 9) + 1;
 }
 
-function addOut(msg) {
-  game.outs++;
+function addOuts(count, msg) {
+  game.outs += count;
   setTicker(msg);
   if (game.outs >= 3) {
     game.outs = 0; game.balls = 0; game.strikes = 0;
@@ -930,6 +943,8 @@ function addOut(msg) {
   }
   return false;
 }
+
+function addOut(msg) { return addOuts(1, msg); }
 
 function endFullGame() {
   game.active = false;
@@ -1019,7 +1034,7 @@ function enterCurrentRole() {
     } else {
       const isOnDeck = game.homeOrder === 2;
       camera.position.copy(isOnDeck ? ONDECK_POS : DUGOUT_POS);
-      lookTarget.set(0, 1.5, 13);
+      lookTarget.set(0, 1.4, 15);
       camera.lookAt(lookTarget);
       game.subPhase = 'OFF_SIM_WAIT';
       game.timer = 1.35 / state.speed;
@@ -1117,16 +1132,49 @@ function resolveSimPitch(isDefense) {
     setBanner('中外野飛球！', '跑位接殺！');
     setTimeout(() => { if (game.subPhase === 'DEF_CF_PLAY') setBanner('', ''); }, 900);
     game.subPhase = 'DEF_CF_PLAY';
-  } else if (res === 'INFIELD_OUT' || res === 'CORNER_OUT' || res === 'TEAM_GROUND_OUT' || res === 'TEAM_FLY_OUT') {
+  } else if (res === 'INFIELD_OUT' || res === 'TEAM_GROUND_OUT') {
     AudioFX.crack(0.8);
-    const isGround = res === 'INFIELD_OUT' || res === 'TEAM_GROUND_OUT';
+    launchVisualBall(28, 4, Math.random() * 48 - 24, 0.8);
+    const canDP = game.bases[0] && game.outs < 2 && Math.random() < 0.48;
+    if (canDP) {
+      game.bases[0] = false;
+      if (!isDefense && game.playerBase === 1) game.playerBase = 0;
+      setBanner('DOUBLE PLAY!', '6-4-3 雙殺打！');
+      if (!addOuts(2, '內野滾地球！策動漂亮雙殺打！')) {
+        nextBatter();
+        game.subPhase = 'WATCH_BALL';
+        game.timer = 1.7 / state.speed;
+      }
+    } else {
+      if (!addOut('內野滾地球遭到刺殺出局！')) {
+        nextBatter();
+        game.subPhase = 'WATCH_BALL';
+        game.timer = 1.6 / state.speed;
+      }
+    }
+  } else if (res === 'CORNER_OUT' || res === 'TEAM_FLY_OUT') {
+    AudioFX.crack(0.85);
     const spray = res === 'CORNER_OUT' ? (Math.random() > 0.5 ? 28 : -28) : (Math.random() * 52 - 26);
-    launchVisualBall(isGround ? 28 : 37, isGround ? 4 : 35, spray, 0.8);
-    const desc = isGround ? '滾地球遭到內野刺殺出局！' : '外野高飛球遭到接殺出局！';
-    if (!addOut(desc)) {
-      nextBatter();
-      game.subPhase = 'WATCH_BALL';
-      game.timer = 1.65 / state.speed;
+    if (!isDefense && game.playerBase === 3 && game.outs < 2) {
+      startInteractiveTagUp(spray);
+      return;
+    }
+    launchVisualBall(38, 34, spray, 0.9);
+    const canSac = game.bases[2] && game.outs < 2 && Math.random() < 0.68;
+    if (canSac) {
+      game.bases[2] = false;
+      addRuns(1);
+      if (!addOut('外野高飛犧牲打！三壘跑者滑回本壘得分！')) {
+        nextBatter();
+        game.subPhase = 'WATCH_BALL';
+        game.timer = 1.8 / state.speed;
+      }
+    } else {
+      if (!addOut('外野高飛球遭到接殺出局！')) {
+        nextBatter();
+        game.subPhase = 'WATCH_BALL';
+        game.timer = 1.65 / state.speed;
+      }
     }
   } else if (res === 'AWAY_GROUND_HIT' || res === 'CORNER_HIT' || res === 'AWAY_HR') {
     AudioFX.crack(1.1);
@@ -1240,11 +1288,24 @@ function swingBat() {
         setBanner('滾地穿越安打！', sc > 0 ? `帶有 ${sc} 分打點！` : '強勁滾地穿出內野上壘！');
         setTicker(`${pInfo}你擊出滾地穿越安打！${sc > 0 ? ` 貢獻 ${sc} 分打點！` : ''}`);
         nextBatter();
+      } else if (game.bases[0] && game.outs < 2 && Math.random() < 0.45) {
+        game.bases[0] = false;
+        setBanner('DOUBLE PLAY!', '內野滾地球雙殺打！');
+        if (!addOuts(2, `${pInfo}內野滾地球遭到雙殺！`)) nextBatter();
       } else {
         if (!addOut(`${pInfo}內野滾地球遭到刺殺出局！`)) nextBatter();
       }
     } else if (la > 25 && dist < 104 && Math.random() < 0.64) {
-      if (!addOut(`${pInfo}外野高飛球遭到接殺出局！`)) nextBatter();
+      if (game.bases[2] && game.outs < 2 && dist > 72) {
+        game.bases[2] = false;
+        addRuns(1);
+        game.stats.ab--;
+        game.stats.rbi++;
+        setBanner('高飛犧牲打！', '三壘跑者滑回本壘！+1 打點');
+        if (!addOut(`${pInfo}你擊出高飛犧牲打！送回三壘跑者！`)) nextBatter();
+      } else {
+        if (!addOut(`${pInfo}外野高飛球遭到接殺出局！`)) nextBatter();
+      }
     } else {
       AudioFX.cheer();
       game.stats.h++;
@@ -1298,6 +1359,9 @@ function attemptSteal() {
 
 function startInteractiveBaserunning(hitBases, isGround = false) {
   game.subPhase = 'BASE_RUN';
+  game.runHitBases = hitBases;
+  game.runInitialBases = [...game.bases];
+  game.runInitialPlayerBase = game.playerBase;
   game.runProgress = 0;
   game.runTargetBase = game.playerBase + 1;
   game.runSafeTimeout = 2.6 + hitBases * 0.9;
@@ -1307,6 +1371,170 @@ function startInteractiveBaserunning(hitBases, isGround = false) {
   const label = isGround ? '滾地穿越安打' : (hitBases === 2 ? '二壘安打' : '外野安打');
   setBanner('隊友安打！', '按住「衝刺 / Space」往下一壘衝！');
   setTicker(`隊友擊出${label}！按住衝刺跑壘！`);
+}
+
+function finalizeInteractiveBaserunning(playerFinalBase, playerOut = false) {
+  btnRun.style.display = 'none';
+  const initB = game.runInitialBases;
+  const initMe = game.runInitialPlayerBase;
+  const hitB = game.runHitBases;
+  const meAdvanced = playerOut ? Math.max(0, game.runTargetBase - 1 - initMe) : (playerFinalBase - initMe);
+  const leadStep = Math.max(hitB, meAdvanced);
+
+  const nextB = [false, false, false];
+  let scored = 0;
+  let leadOutAtHome = false;
+
+  for (let i = 2; i >= 0; i--) {
+    if (!initB[i] || i + 1 === initMe) continue;
+    const baseNum = i + 1;
+    const step = baseNum > initMe ? leadStep : hitB;
+    const dest = baseNum + step;
+    if (dest >= 4) {
+      if (!playerOut && meAdvanced > hitB && Math.random() < 0.35) {
+        leadOutAtHome = true;
+      } else {
+        scored++;
+      }
+    } else {
+      nextB[dest - 1] = true;
+    }
+  }
+
+  let batterDest = hitB;
+  if (!playerOut && playerFinalBase >= 1 && playerFinalBase <= 3) {
+    nextB[playerFinalBase - 1] = true;
+    if (batterDest === playerFinalBase && batterDest > 1) batterDest = 1;
+  }
+  if (batterDest >= 1 && batterDest <= 3) nextB[batterDest - 1] = true;
+
+  if (!playerOut && playerFinalBase >= 4) scored++;
+  game.bases = nextB;
+  game.playerBase = (!playerOut && playerFinalBase >= 1 && playerFinalBase <= 3) ? playerFinalBase : 0;
+  addRuns(scored);
+
+  const bName = ['', '一', '二', '三'][batterDest] + '壘';
+  if (playerOut) {
+    AudioFX.tone(160, 0.25);
+    setBanner('OUT!', '外野回傳球到！觸殺出局！');
+    if (!addOut(`搶壘遭到觸殺出局！隊友站上${bName}${scored > 0 ? `（前位跑者得 ${scored} 分）` : ''}`)) {
+      nextBatter();
+      enterAfterPause(1.6);
+    }
+  } else if (leadOutAtHome) {
+    AudioFX.tone(240, 0.2);
+    setBanner('SAFE!（本壘OUT）', `對方回傳本壘觸殺前位跑者！你安全上${['', '一', '二', '三'][playerFinalBase]}壘`);
+    if (!addOut(`前位跑者本壘遭觸殺！你安全上${['', '一', '二', '三'][playerFinalBase]}壘，隊友上${bName}`)) {
+      nextBatter();
+      enterAfterPause(1.8);
+    }
+  } else if (playerFinalBase >= 4) {
+    AudioFX.cheer();
+    setBanner('SCORE!!', `滑回本壘！這球共攻下 ${scored} 分`);
+    setTicker(`你跑回本壘得分！隊友站上${bName}（共 +${scored} 分）`);
+    nextBatter();
+    enterAfterPause(1.6);
+  } else {
+    setBanner('SAFE!', `安全上到${['', '一', '二', '三'][playerFinalBase]}壘`);
+    setTicker(`你站上${['', '一', '二', '三'][playerFinalBase]}壘、隊友上${bName}${scored > 0 ? `｜前位跑者得分 (+${scored})` : ''}`);
+    nextBatter();
+    enterAfterPause(1.5);
+  }
+  updateGameUI();
+}
+
+function startInteractiveTagUp(spray) {
+  game.subPhase = 'BASE_TAGUP';
+  game.tagBallCaught = false;
+  game.tagThrowTimer = 2.05;
+  game.runProgress = 0;
+  holdRun = false;
+  launchVisualBall(39, 36, spray, 0.95);
+  btnSteal.style.display = 'none';
+  btnRun.style.display = 'block';
+  setBanner('高飛犧牲打機會！', '轉頭看球！等外野手「接殺瞬間」再按住衝刺！');
+  setTicker('隊友擊出外野高飛球！你在三壘準備 Tag-up！');
+}
+
+function updateInteractiveTagUp(dt) {
+  if (!game.tagBallCaught) {
+    stepPhysics(state.ballPos, state.ballVel, 0.95, dt);
+    ballMesh.position.copy(state.ballPos);
+    ballMesh.scale.setScalar(THREE.MathUtils.clamp(camera.position.distanceTo(state.ballPos) * 0.025, 1.0, 2.5));
+    ballShadow.position.set(state.ballPos.x, 0.07, state.ballPos.z);
+
+    if (holdRun) {
+      game.runProgress += 0.65 * dt;
+      const cur = new THREE.Vector3().lerpVectors(BASES[3], BASES[0], game.runProgress);
+      cur.y = 1.65;
+      camera.position.copy(cur);
+      if (game.runProgress > 0.16) {
+        btnRun.style.display = 'none';
+        AudioFX.tone(150, 0.3);
+        game.bases[2] = false;
+        game.playerBase = 0;
+        setBanner('提早離壘！', '還沒接殺就起跑，遭回傳三壘雙殺！');
+        if (!addOuts(2, '高飛球提早離壘！回傳三壘形成雙殺！')) {
+          nextBatter();
+          enterAfterPause(1.8);
+        }
+        updateGameUI();
+        return;
+      }
+    }
+    lookTarget.lerp(state.ballPos, 0.2);
+    camera.lookAt(lookTarget);
+
+    if (state.ballPos.y <= 1.75 && state.ballVel.y < 0) {
+      game.tagBallCaught = true;
+      AudioFX.glovePop();
+      AudioFX.tone(620, 0.14);
+      setBanner('接殺！快衝！', '按住「衝刺 / Space」滑回本壘！');
+      setTicker('外野手接殺出局！現在起跑衝本壘！');
+    }
+  } else {
+    game.tagThrowTimer -= dt;
+    if (holdRun) {
+      game.runProgress = Math.min(1, game.runProgress + 0.66 * dt);
+      const cur = new THREE.Vector3().lerpVectors(BASES[3], BASES[0], game.runProgress);
+      cur.y = 1.65 + Math.sin(performance.now() * 0.024) * 0.09;
+      camera.position.copy(cur);
+      lookTarget.lerp(new THREE.Vector3(0, 1.2, 0), 0.22);
+      camera.lookAt(lookTarget);
+    }
+    if (game.runProgress >= 1) {
+      btnRun.style.display = 'none';
+      AudioFX.cheer();
+      game.bases[2] = false;
+      game.playerBase = 0;
+      addRuns(1);
+      setBanner('SAFE! 得分！', '漂亮的高飛犧牲打！滑回本壘 +1 分');
+      if (!addOut('高飛犧牲打成功！你滑回本壘攻下 1 分！')) {
+        nextBatter();
+        enterAfterPause(1.7);
+      }
+      updateGameUI();
+    } else if (game.tagThrowTimer <= 0) {
+      btnRun.style.display = 'none';
+      if (game.runProgress > 0.18) {
+        AudioFX.tone(160, 0.28);
+        game.bases[2] = false;
+        game.playerBase = 0;
+        setBanner('OUT! 本壘助殺！', '外野雷射肩回傳本壘觸殺出局！');
+        if (!addOuts(2, '高飛球接殺＋本壘助殺！形成雙殺！')) {
+          nextBatter();
+          enterAfterPause(1.8);
+        }
+      } else {
+        setBanner('穩守三壘', '選擇不冒險，留在三壘');
+        if (!addOut('外野高飛球接殺出局！你選擇留在三壘')) {
+          nextBatter();
+          enterAfterPause(1.4);
+        }
+      }
+      updateGameUI();
+    }
+  }
 }
 
 function updateBaserunning(dt) {
@@ -1345,50 +1573,26 @@ function updateBaserunning(dt) {
 
   game.runSafeTimeout -= dt;
   if (game.runProgress >= 1) {
-    game.bases[game.playerBase - 1] = false;
     if (game.runTargetBase >= 4) {
-      AudioFX.cheer();
-      game.playerBase = 0;
-      addRuns(1);
-      setBanner('SCORE!!', '滑回本壘攻下 1 分！');
-      setTicker('你成功跑回本壘得分！');
-      btnRun.style.display = 'none';
-      nextBatter();
-      enterAfterPause(1.6);
-      updateGameUI();
+      finalizeInteractiveBaserunning(4, false);
       return;
     }
     game.playerBase = game.runTargetBase;
-    game.bases[game.playerBase - 1] = true;
     AudioFX.tone(600, 0.12);
-    if (holdRun && game.runSafeTimeout > 0.35 && !game.bases[game.playerBase % 3]) {
+    if (holdRun && game.runSafeTimeout > 0.35) {
       game.runTargetBase = game.playerBase + 1;
       game.runProgress = 0;
       setBanner('繼續衝！', `挑戰直闖${game.runTargetBase === 4 ? '本壘' : '三壘'}！`);
     } else {
-      btnRun.style.display = 'none';
-      setBanner('SAFE!', `安全上到${['', '一', '二', '三'][game.playerBase]}壘`);
-      nextBatter();
-      enterAfterPause(1.3);
+      finalizeInteractiveBaserunning(game.playerBase, false);
     }
-    updateGameUI();
   } else if (game.runSafeTimeout <= 0) {
-    btnRun.style.display = 'none';
     if (game.runProgress > 0.22) {
-      AudioFX.tone(160, 0.25);
-      game.bases[game.playerBase - 1] = false;
-      game.playerBase = 0;
-      setBanner('OUT!', '外野回傳球到！觸殺出局！');
-      if (!addOut('搶壘遭到觸殺出局！')) {
-        nextBatter();
-        enterAfterPause(1.5);
-      }
+      finalizeInteractiveBaserunning(0, true);
     } else {
-      setBanner('留壘', '選擇穩穩留在原壘包');
-      nextBatter();
-      enterAfterPause(1.1);
+      const minForced = Math.min(4, game.runInitialPlayerBase + game.runHitBases);
+      finalizeInteractiveBaserunning(Math.max(game.playerBase, minForced), false);
     }
-    updateGameUI();
   }
 }
 
@@ -1614,10 +1818,21 @@ function animate(now) {
           AudioFX.glovePop(); AudioFX.cheer();
           game.stats.po++;
           landingRing.visible = false;
-          setBanner(player.diving ? '美技撲接！' : '接殺出局！', '');
-          if (!addOut(player.diving ? '中外野五星級撲接接殺！' : '中外野飛球穩穩接殺出局！')) {
-            nextBatter();
-            enterAfterPause(1.5);
+          const isSac = game.bases[2] && game.outs < 2 && player.pos.z > 78 && Math.random() < 0.65;
+          if (isSac) {
+            game.bases[2] = false;
+            addRuns(1);
+            setBanner('接殺（高飛犧牲打）', '三壘跑者趁傳滑回本壘失 1 分');
+            if (!addOut('中外野深遠飛球接殺！但三壘跑者跑回本壘得分')) {
+              nextBatter();
+              enterAfterPause(1.6);
+            }
+          } else {
+            setBanner(player.diving ? '美技撲接！' : '接殺出局！', '');
+            if (!addOut(player.diving ? '中外野五星級撲接接殺！' : '中外野飛球穩穩接殺出局！')) {
+              nextBatter();
+              enterAfterPause(1.5);
+            }
           }
           break;
         }
@@ -1703,6 +1918,8 @@ function animate(now) {
       if (game.timer <= 0) enterCurrentRole();
     } else if (game.subPhase === 'BASE_RUN' || game.subPhase === 'BASE_STEAL') {
       updateBaserunning(dt);
+    } else if (game.subPhase === 'BASE_TAGUP') {
+      updateInteractiveTagUp(dt);
     }
   } else if (state.mode !== 'game') {
     if (state.phase === 'PITCHING') {
