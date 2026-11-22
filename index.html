@@ -899,15 +899,21 @@ function generatePlayableBall(narrow = false) {
 }
 
 function getMoveInput() {
-  let x = 0, z = 0;
-  if (keys['KeyW'] || keys['ArrowUp']) z -= 1;
-  if (keys['KeyS'] || keys['ArrowDown']) z += 1;
+  let x = 0, y = 0;
+  if (keys['KeyW'] || keys['ArrowUp']) y -= 1;
+  if (keys['KeyS'] || keys['ArrowDown']) y += 1;
   if (keys['KeyA'] || keys['ArrowLeft']) x -= 1;
   if (keys['KeyD'] || keys['ArrowRight']) x += 1;
-  if (joy.active) { x += joy.dx; z += joy.dy; }
-  const v = new THREE.Vector3(x, 0, z);
-  if (v.length() > 1) v.normalize();
-  return v;
+  if (joy.active) { x += joy.dx; y += joy.dy; }
+  const len = Math.hypot(x, y);
+  if (len > 1) { x /= len; y /= len; }
+  const forward = new THREE.Vector3();
+  camera.getWorldDirection(forward);
+  forward.y = 0;
+  if (forward.lengthSq() > 0.0001) forward.normalize();
+  else forward.set(0, 0, -1);
+  const right = new THREE.Vector3(-forward.z, 0, forward.x);
+  return new THREE.Vector3().addScaledVector(forward, -y).addScaledVector(right, x);
 }
 
 function triggerDive() {
@@ -1189,12 +1195,13 @@ function spawnLiveRunners(isMeBatting) {
   for (let i = 2; i >= 0; i--) {
     if (game.bases[i]) {
       const isMe = (isPlayerOffense() && game.playerBase === i + 1);
+      const isForced = (i === 0) || (i === 1 && game.bases[0]) || (i === 2 && game.bases[0] && game.bases[1]);
       const m = createPlayerSilhouette(BASES[i + 1].x, BASES[i + 1].z, color);
       if (isMe) m.visible = false;
       liveRunners.push({
         mesh: m, baseFrom: i + 1, baseTo: i + 2, progress: 0,
         speed: 0.25 + Math.random() * 0.03, isBatter: false, isMe,
-        out: false, scored: false, stopped: false, retreating: false
+        isForced, leftEarly: false, out: false, scored: false, stopped: false, retreating: false
       });
     }
   }
@@ -1203,7 +1210,7 @@ function spawnLiveRunners(isMeBatting) {
   liveRunners.push({
     mesh: bm, baseFrom: 0, baseTo: 1, progress: 0,
     speed: 0.26, isBatter: true, isMe: isMeBatting,
-    out: false, scored: false, stopped: false, retreating: false
+    isForced: true, leftEarly: false, out: false, scored: false, stopped: false, retreating: false
   });
   syncStaticRunners();
 }
@@ -1535,21 +1542,34 @@ function updateLivePlay(dt, now) {
   liveRunners.forEach(r => {
     if (r.out || r.scored || r.stopped) return;
 
-    if (r.baseFrom >= 1 && !r.retreating) {
+    const isAirFly = !pl.landed && !pl.flyCaught && pl.la > 14;
+    const forcedNow = r.isForced && pl.landed && !pl.flyCaught;
+
+    // 高飛球還沒落地時，AI 跑者先留在壘包等接殺（不亂衝）
+    if (isAirFly && !r.isBatter && !r.isMe) return;
+
+    // 接殺後若還沒離壘，二三壘深遠飛球 AI 會嘗試 Tag-up 推進，否則留壘
+    if (pl.flyCaught && !r.isMe && !r.leftEarly) {
+      if (r.baseFrom < 2 || state.ballPos.z < 72) { r.stopped = true; return; }
+    }
+
+    // 非強迫進壘才允許回壘（強迫進壘滾地球絕不回壘）
+    if (r.baseFrom >= 1 && !r.retreating && !forcedNow) {
       if (r.isMe && isPlayerOffense()) {
         if (!holdRun && r.progress > 0.03 && r.progress < 0.5) r.retreating = true;
-      } else {
+      } else if (!pl.flyCaught) {
         if ((pl.fielded || pl.throwActive) && r.progress < 0.48) r.retreating = true;
       }
     }
 
     if (r.retreating) {
-      r.progress -= r.speed * 1.2 * dt;
+      r.progress -= r.speed * 1.25 * dt;
       const cur = new THREE.Vector3().lerpVectors(BASES[r.baseFrom % 4], BASES[r.baseTo % 4], Math.max(0, r.progress));
       if (r.isMe && isPlayerOffense()) {
         cur.y = 1.65;
         camera.position.copy(cur);
-        lookTarget.lerp(BASES[r.baseFrom % 4].clone().setY(1.2), 0.2);
+        const backLook = BASES[r.baseFrom % 4].clone().setY(1.2).lerp(ballMesh.position, 0.35);
+        lookTarget.lerp(backLook, 0.2);
         camera.lookAt(lookTarget);
       } else {
         cur.y = Math.abs(Math.sin(now * 0.02)) * 0.14;
@@ -1557,19 +1577,24 @@ function updateLivePlay(dt, now) {
       }
       anyMoving = true;
       if (r.progress <= 0) {
-        r.progress = 0; r.retreating = false; r.baseTo = r.baseFrom; r.stopped = true;
+        r.progress = 0; r.retreating = false; r.leftEarly = false; r.baseTo = r.baseFrom; r.stopped = true;
         if (!r.isMe) r.mesh.position.copy(BASES[r.baseFrom]);
       }
       return;
     }
 
     if (r.isMe && isPlayerOffense()) {
-      const spd = (r.baseFrom === 0 || holdRun) ? 0.32 : 0.0;
+      const spd = (r.baseFrom === 0 || forcedNow || holdRun) ? 0.32 : 0.0;
       r.progress += spd * dt;
       const cur = new THREE.Vector3().lerpVectors(BASES[r.baseFrom % 4], BASES[r.baseTo % 4], Math.min(1, r.progress));
       cur.y = 1.65 + (spd > 0 ? Math.sin(now * 0.022) * 0.08 : 0);
       camera.position.copy(cur);
-      lookTarget.lerp(BASES[r.baseTo % 4].clone().setY(1.2), 0.18);
+      // 邊跑邊瞄球：只要球不在正後方死角，視線會自然往球的方向喵過去
+      const baseLook = BASES[r.baseTo % 4].clone().setY(1.3);
+      const runDir = baseLook.clone().sub(cur).normalize();
+      const ballDir = ballMesh.position.clone().sub(cur).normalize();
+      const gaze = runDir.dot(ballDir) > -0.25 ? baseLook.clone().lerp(ballMesh.position, 0.55) : baseLook;
+      lookTarget.lerp(gaze, 0.16);
       camera.lookAt(lookTarget);
     } else {
       r.progress += r.speed * dt;
@@ -1581,6 +1606,7 @@ function updateLivePlay(dt, now) {
 
     if (r.progress >= 1) {
       r.baseFrom = r.baseTo;
+      r.isForced = false;
       r.progress = 0;
       if (r.baseFrom >= 4) {
         r.scored = true; r.mesh.visible = false;
@@ -1589,7 +1615,7 @@ function updateLivePlay(dt, now) {
         AudioFX.tone(660, 0.15);
       } else {
         const ballDeep = state.ballPos.z > 55 && !pl.fielded && !pl.throwActive;
-        const canStretch = (r.isMe && holdRun) || (!r.isMe && ballDeep && r.baseFrom < 4);
+        const canStretch = !pl.flyCaught && ((r.isMe && holdRun) || (!r.isMe && ballDeep && r.baseFrom < 4));
         if (canStretch) r.baseTo = r.baseFrom + 1;
         else { r.stopped = true; r.mesh.position.copy(BASES[r.baseFrom]); }
       }
@@ -1609,26 +1635,49 @@ function updateLivePlay(dt, now) {
 function handleFlyOut(fielderId, isPlayerCF) {
   const pl = game.play;
   pl.fielded = true;
-  pl.resolved = true;
+  pl.flyCaught = true;
   AudioFX.glovePop();
   if (isPlayerCF) { AudioFX.cheer(); game.stats.po++; }
   landingRing.visible = false;
-  btnRun.style.display = 'none';
 
-  const isSac = game.bases[2] && game.outs < 2 && state.ballPos.z > 74 && Math.random() < 0.65;
-  if (isSac) {
-    game.bases[2] = false;
-    addRuns(1);
-    if (pl.isMeBatting) { game.stats.ab--; game.stats.rbi++; }
-    setBanner('接殺（高飛犧牲打）', '三壘跑者趁傳滑回本壘得分！');
-    if (!addOut(`${fielderId} 深遠飛球接殺！三壘跑者跑回本壘得分`)) {
-      nextBatter(); enterAfterPause(1.6);
-    }
-  } else {
+  const batter = liveRunners.find(r => r.isBatter);
+  if (batter) { batter.out = true; batter.mesh.visible = false; }
+
+  const onBase = liveRunners.filter(r => !r.isBatter && !r.out);
+  if (onBase.length === 0 || game.outs + 1 >= 3) {
+    pl.resolved = true;
+    btnRun.style.display = 'none';
     setBanner(isPlayerCF && player.diving ? '美技撲接！' : '接殺出局！', `${fielderId} 穩穩接殺`);
-    if (!addOut(`${fielderId} 飛球接殺出局！`)) {
-      nextBatter(); enterAfterPause(1.4);
+    if (!addOut(`${fielderId} 飛球接殺出局！`)) { nextBatter(); enterAfterPause(1.4); }
+    updateGameUI();
+    return;
+  }
+
+  // 有跑者且未滿兩出局：檢查有沒有人提早離壘，並讓外野手回傳！
+  let targetBase = 2;
+  onBase.forEach(r => {
+    if (r.progress > 0.08) {
+      r.leftEarly = true;
+      r.retreating = true;
+      targetBase = r.baseFrom;
+    } else if (r.baseFrom >= 2) {
+      targetBase = Math.max(targetBase, r.baseTo);
     }
+  });
+
+  if (isPlayerCF) {
+    player.hasBall = true;
+    setBanner('接殺出局！快回傳！', '按「回傳 / Space」防止跑者推進或抓雙殺！');
+    updateDiveBtnState();
+  } else {
+    const f = getFielderById(fielderId);
+    pl.fielderRef = f;
+    pl.throwDelay = 0.38;
+    pl.relayActive = false;
+    pl.pendingThrowTargetPos = BASES[targetBase % 4].clone().setY(1.2);
+    pl.pendingThrowTargetBase = targetBase;
+    setBanner('接殺出局！', '可按住衝刺拚 Tag-up 推進，提早離壘快回壘！');
+    setTicker(`${fielderId} 接殺出局！回傳${['本', '一', '二', '三', '本'][targetBase]}壘！`);
   }
   updateGameUI();
 }
@@ -1690,8 +1739,10 @@ function resolveThrowArrival() {
   let gotOut = false;
 
   liveRunners.forEach(r => {
-    if (r.out || r.scored || r.retreating) return;
-    if (r.baseTo === tb && r.progress > 0.15 && r.progress < 0.99) {
+    if (r.out || r.scored) return;
+    const caughtAdvancing = !r.retreating && r.baseTo === tb && r.progress > 0.15 && r.progress < 0.99;
+    const caughtOffBase = r.leftEarly && r.baseFrom === tb && r.progress > 0.05;
+    if (caughtAdvancing || caughtOffBase) {
       r.out = true;
       r.mesh.visible = false;
       gotOut = true;
