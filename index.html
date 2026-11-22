@@ -851,7 +851,7 @@ function updateDiveBtnState() {
   }
   if (player.hasBall) {
     const isRelay = game.playerPos !== 'SS' && player.pos.z > 88;
-    const tb = getBestThrowTargetBase();
+    const tb = getBestThrowTargetBase(true);
     const bName = ['本壘', '一壘', '二壘', '三壘', '本壘'][tb];
     diveBtn.textContent = isRelay ? `轉傳\n${bName}` : `直傳\n${bName}`;
     diveBtn.classList.add('throw');
@@ -994,8 +994,8 @@ function pickUpBallCF() {
   updateDiveBtnState();
 }
 
-function getBestThrowTargetBase() {
-  if (game.playerPos === 'SS') {
+function getBestThrowTargetBase(forPlayerSS = false) {
+  if (forPlayerSS && isPlayerDefense() && game.playerPos === 'SS') {
     if (game.bases[0] && game.outs < 2 && !game.play.dpCoverDone) return 2;
     return 1;
   }
@@ -1016,7 +1016,7 @@ function throwBallFromCF() {
   if (!player.hasBall || !game.play) return;
   player.hasBall = false;
   const pl = game.play;
-  const targetBase = getBestThrowTargetBase();
+  const targetBase = getBestThrowTargetBase(true);
   const bName = ['本壘', '一壘', '二壘', '三壘', '本壘'][targetBase];
   const isRelay = game.playerPos !== 'SS' && player.pos.z > 88;
 
@@ -1631,7 +1631,7 @@ function updateLivePlay(dt, now) {
   liveRunners.forEach(r => {
     if (r.out || r.scored || r.stopped) return;
 
-    const isAirFly = !pl.landed && !pl.flyCaught && pl.la > 14;
+    const isAirFly = !pl.landed && !pl.flyCaught && pl.la > 8;
     const forcedNow = r.isForced && pl.landed && !pl.flyCaught;
 
     // 高飛球還沒落地時，AI 跑者先留在壘包等接殺（不亂衝）
@@ -1745,11 +1745,11 @@ function handleFlyOut(fielderId, isPlayerCF) {
   const meRunning = isPlayerOffense() && game.playerBase > 0;
   let targetBase = 0;
   onBase.forEach(r => {
-    if (r.progress > 0.08) {
+    if (r.isMe && r.progress > 0.08) {
       r.leftEarly = true;
       r.retreating = true;
       targetBase = r.baseFrom;
-    } else if (r.baseFrom >= 2 && state.ballPos.z >= 72) {
+    } else if (r.baseFrom >= 2 && state.ballPos.z >= 88) {
       targetBase = Math.max(targetBase, r.baseTo);
     } else if (r.isMe && r.baseFrom >= 2) {
       targetBase = Math.max(targetBase, r.baseTo);
@@ -1833,7 +1833,7 @@ function resolveThrowArrival() {
 
   if (pl.relayActive) {
     pl.relayActive = false;
-    const tb = pl.relayFinalBase;
+    const tb = getBestThrowTargetBase(false);
     const bName = ['本', '一', '二', '三', '本'][tb];
     pl.fielderRef = pl.cutoffFielder;
     pl.throwDelay = 0.32;
