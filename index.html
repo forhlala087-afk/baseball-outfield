@@ -1472,6 +1472,7 @@ function updateLivePlay(dt, now) {
 function handleFlyOut(fielderId, isPlayerCF) {
   const pl = game.play;
   pl.fielded = true;
+  pl.resolved = true;
   AudioFX.glovePop();
   if (isPlayerCF) { AudioFX.cheer(); game.stats.po++; }
   landingRing.visible = false;
