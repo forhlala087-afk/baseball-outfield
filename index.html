@@ -1636,7 +1636,7 @@ function updateLivePlay(dt, now) {
     // 檢查後面有沒有跑者正在往自己原本的壘包衝（被後位跑者推著走）
     const pushedByTrailer = liveRunners.slice(idx + 1).some(tr =>
       !tr.out && !tr.scored && !tr.retreating &&
-      ((tr.baseTo === r.baseFrom && (!tr.stopped || tr.progress > 0)) || tr.baseFrom >= r.baseFrom)
+      ((tr.baseTo === r.baseFrom && (tr.isForced || tr.progress > 0.5)) || tr.baseFrom >= r.baseFrom)
     );
 
     if (r.stopped) {
@@ -1874,12 +1874,16 @@ function resolveThrowArrival() {
 
   liveRunners.forEach(r => {
     if (r.out || r.scored) return;
-    const caughtAdvancing = !r.retreating && r.baseTo === tb && r.progress > 0.15 && r.progress < 0.99;
+    const isForcePlay = r.isForced && !pl.flyCaught;
+    const minProg = isForcePlay ? 0.15 : 0.5;
+    const caughtAdvancing = !r.retreating && r.baseTo === tb && r.progress > minProg && r.progress < 0.99;
     const caughtOffBase = r.leftEarly && r.baseFrom === tb && r.progress > 0.05;
     if (caughtAdvancing || caughtOffBase) {
       r.out = true;
       r.mesh.visible = false;
       gotOut = true;
+    } else if (!r.retreating && r.baseTo === tb && r.progress <= minProg) {
+      r.retreating = true;
     }
   });
 
