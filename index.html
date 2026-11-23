@@ -1656,8 +1656,9 @@ function updateLivePlay(dt, now) {
       if (r.baseFrom < 2 || state.ballPos.z < 88) { r.stopped = true; return; }
     }
 
-    // 非強迫進壘、且沒有被後位跑者推著走時，才允許回壘
-    if (r.baseFrom >= 1 && !r.retreating && !forcedNow && !pushedByTrailer) {
+    // 非強迫進壘、且沒有被後位跑者推著走時，才允許回壘（外野安打時三壘跑者直接衝本壘不縮回去）
+    const scoringOnOFHit = !r.isMe && r.baseFrom === 3 && pl.landed && !pl.flyCaught && state.ballPos.z > 42;
+    if (r.baseFrom >= 1 && !r.retreating && !forcedNow && !pushedByTrailer && !scoringOnOFHit) {
       if (r.isMe && isPlayerOffense()) {
         if (!holdRun && r.progress > 0.03 && r.progress < 0.5) r.retreating = true;
       } else if (!pl.flyCaught) {
@@ -1902,6 +1903,21 @@ function resolveThrowArrival() {
     pl.pendingThrowTargetPos = BASES[1].clone().setY(1.2);
     pl.pendingThrowTargetBase = 1;
     setTicker('二壘封殺！轉身快傳一壘拚雙殺！');
+    return;
+  }
+
+  const totalOutsNow = game.outs + liveRunners.filter(r => r.out).length;
+  const advancing = liveRunners.filter(r => !r.out && !r.scored && !r.stopped && !r.retreating && r.progress > 0.1 && r.baseTo !== tb);
+  if (totalOutsNow < 3 && advancing.length > 0 && (pl.extraThrows || 0) < 2) {
+    pl.extraThrows = (pl.extraThrows || 0) + 1;
+    const nextTb = advancing[0].baseTo;
+    const fromName = ['本', '一', '二', '三', '本'][tb];
+    const toName = ['本', '一', '二', '三', '本'][nextTb];
+    pl.fielderRef = { pos: BASES[tb % 4] };
+    pl.throwDelay = 0.32;
+    pl.pendingThrowTargetPos = BASES[nextTb % 4].clone().setY(1.2);
+    pl.pendingThrowTargetBase = nextTb;
+    setTicker(`${fromName}壘接到球！發現跑者還在衝，轉身快傳${toName}壘！`);
     return;
   }
 
