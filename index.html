@@ -1024,6 +1024,28 @@ function getCutoffFielder(fromPos) {
 function hasRunnerMovingTo(tb) {
   return liveRunners.some(r => !r.out && !r.scored && !r.stopped && !r.retreating && r.baseTo === tb && r.progress > 0.05);
 }
+function getBaseCoverFielder(tb, excludeId = '') {
+  if (tb === 4) return { id: 'C', pos: catcherMesh.position, isCatcher: true };
+  const basePos = BASES[tb % 4];
+  let best = null, bestDist = 16;
+  fielders.forEach(f => {
+    if (f.type !== 'IF' || !f.mesh.visible || f.id === excludeId) return;
+    const d = Math.hypot(f.pos.x - basePos.x, f.pos.z - basePos.z);
+    if (d < bestDist) { bestDist = d; best = f; }
+  });
+  if (tb === 1 && excludeId !== 'P') {
+    const pd = Math.hypot(pitcherMesh.position.x - basePos.x, pitcherMesh.position.z - basePos.z);
+    if (pd < bestDist) { bestDist = pd; best = { id: 'P', pos: pitcherMesh.position, mesh: pitcherMesh }; }
+  }
+  if (isPlayerDefense() && game.playerPos === 'SS' && excludeId !== 'PLAYER') {
+    const myD = Math.hypot(player.pos.x - basePos.x, player.pos.z - basePos.z);
+    if (myD < bestDist) {
+      bestDist = myD;
+      best = { id: 'SS(你)', pos: player.pos, isPlayer: true };
+    }
+  }
+  return best;
+}
 
 function throwBallFromCF() {
   if (!player.hasBall || !game.play) return;
@@ -1047,14 +1069,26 @@ function throwBallFromCF() {
     pl.pendingThrowTargetBase = -1;
     setBanner(runnerAdvancing ? `傳給 ${cutoff.id} 轉傳${bName}！` : `回傳給最近的 ${cutoff.id}！`, '');
   } else {
-    pl.relayActive = false;
-    pl.pendingThrowTargetPos = BASES[targetBase % 4].clone().setY(1.2);
-    pl.pendingThrowTargetBase = targetBase;
-    if (game.playerPos === 'SS' && targetBase === 2 && game.bases[0] && game.outs < 2 && !pl.dpCoverDone) {
-      pl.dpSecondThrow = true;
-      pl.fielderId = 'SS';
+    const cover = getBaseCoverFielder(targetBase, 'PLAYER');
+    if (!cover) {
+      const cutoff = getCutoffFielder(player.pos);
+      pl.relayActive = true;
+      pl.cutoffFielder = cutoff;
+      pl.relayFinalBase = targetBase;
+      pl.pendingThrowTargetPos = cutoff.pos.clone().setY(1.4);
+      pl.pendingThrowTargetBase = -1;
+      setBanner(`見${bName}無人補位，改傳給 ${cutoff.id}！`, '');
+    } else {
+      pl.relayActive = false;
+      pl.throwTargetFielder = cover;
+      pl.pendingThrowTargetPos = cover.pos.clone().setY(1.35);
+      pl.pendingThrowTargetBase = targetBase;
+      if (game.playerPos === 'SS' && targetBase === 2 && game.bases[0] && game.outs < 2 && !pl.dpCoverDone) {
+        pl.dpSecondThrow = true;
+        pl.fielderId = 'SS';
+      }
+      setBanner(`直傳補位${bName}的 ${cover.id}！`, '');
     }
-    setBanner(`雷射肩直傳${bName}！`, '');
   }
   updateDiveBtnState();
 }
@@ -1512,14 +1546,17 @@ function updateFieldersAndCoverage(dt) {
   const f1B = getFielderById('1B');
   const firstBaseOffBag = (primaryChaser === f1B || pl.fielderId === '1B') || Math.hypot(f1B.pos.x - BASES[1].x, f1B.pos.z - BASES[1].z) > 4.5;
   if (firstBaseOffBag) {
-    moveObjToward(pitcherMesh.position, BASES[1], 7.4, dt);
+    const pTarget = pl.tag === '軟弱滾地' ? new THREE.Vector3(-23, 0, 23) : BASES[1];
+    moveObjToward(pitcherMesh.position, pTarget, 7.4, dt);
   }
 
   fielders.forEach(f => {
     if (!f.mesh.visible) return;
     if (f === pl.fielderRef && pl.throwDelay > 0) return;
 
-    if (!pl.fielded && (f === primaryChaser || f === bloopIF || f === bloopOF)) {
+    if (pl.selfCoverBase && f === pl.fielderRef) {
+      moveObjToward(f.pos, BASES[pl.selfCoverBase % 4], f.speed, dt);
+    } else if (!pl.fielded && (f === primaryChaser || f === bloopIF || f === bloopOF)) {
       const target = (!pl.landed && (f.type === 'OF' || pl.tag === '三不管')) ? state.meta.land : state.ballPos;
       moveObjToward(f.pos, target, f.speed, dt);
     } else if (f.id === '1B') {
@@ -1579,7 +1616,9 @@ function updateLivePlay(dt, now) {
     if (pl.throwDelay <= 0) {
       pl.throwActive = true;
       pl.throwFrom = ballMesh.position.clone();
-      pl.throwTo = pl.relayActive && pl.cutoffFielder ? pl.cutoffFielder.pos.clone().setY(1.4) : pl.pendingThrowTargetPos.clone();
+      pl.throwTo = pl.relayActive && pl.cutoffFielder
+        ? pl.cutoffFielder.pos.clone().setY(1.4)
+        : (pl.throwTargetFielder ? pl.throwTargetFielder.pos.clone().setY(1.35) : pl.pendingThrowTargetPos.clone());
       pl.throwTargetBase = pl.pendingThrowTargetBase;
       pl.throwT = 0;
       const throwDist = pl.throwFrom.distanceTo(pl.throwTo);
@@ -1667,17 +1706,34 @@ function updateLivePlay(dt, now) {
     });
   } else if (player.hasBall) {
     ballMesh.position.set(player.pos.x, player.pos.y - 0.25, player.pos.z - 0.4);
+    if (pl.playerCoverBase && isPlayerDefense() && game.playerPos === 'SS') {
+      const bPos = BASES[pl.playerCoverBase % 4];
+      if (Math.hypot(player.pos.x - bPos.x, player.pos.z - bPos.z) < 1.35) {
+        AudioFX.glovePop();
+        const tb = pl.playerCoverBase;
+        pl.playerCoverBase = 0;
+        pl.throwTargetBase = tb;
+        player.hasBall = false;
+        resolveThrowArrival();
+        return;
+      }
+    }
   } else if (pl.selfCoverBase && pl.fielderRef) {
     ballMesh.position.set(pl.fielderRef.pos.x, 1.35, pl.fielderRef.pos.z);
     ballShadow.position.set(ballMesh.position.x, 0.07, ballMesh.position.z);
-    if (Math.hypot(pl.fielderRef.pos.x - BASES[1].x, pl.fielderRef.pos.z - BASES[1].z) < 0.6) {
+    const bPos = BASES[pl.selfCoverBase % 4];
+    if (Math.hypot(pl.fielderRef.pos.x - bPos.x, pl.fielderRef.pos.z - bPos.z) < 0.65) {
       AudioFX.glovePop();
+      const tb = pl.selfCoverBase;
       pl.selfCoverBase = 0;
-      pl.throwTargetBase = 1;
+      pl.throwTargetBase = tb;
       resolveThrowArrival();
       return;
     }
   } else if (pl.throwActive) {
+    if (pl.throwTargetFielder && pl.throwTargetFielder.pos) {
+      pl.throwTo.set(pl.throwTargetFielder.pos.x, 1.35, pl.throwTargetFielder.pos.z);
+    }
     pl.throwT += dt;
     const p = Math.min(1, pl.throwT / pl.throwDur);
     ballMesh.position.lerpVectors(pl.throwFrom, pl.throwTo, p);
@@ -1898,21 +1954,30 @@ function handleAIFieldGroundBall(f) {
       pl.selfCoverBase = 1;
       setTicker(abandonedDP ? '1B 看游擊手還沒補位到二壘，放棄雙殺自己跑去踩一壘！' : '1B 接到滾地球，自己跑去踩一壘包！');
     } else {
+      const cover = getBaseCoverFielder(targetBase, f.id);
+      if (!cover) {
+        pl.throwDelay = 0;
+        setTicker(`${f.id} 接到滾地球，見無人補位便持球牽制！`);
+        finalizeLivePlay(false, targetBase);
+        return;
+      }
       pl.throwDelay = 0.38;
       if (targetBase === 2) pl.dpSecondThrow = true;
       pl.relayActive = false;
-      pl.pendingThrowTargetPos = BASES[targetBase % 4].clone().setY(1.2);
+      pl.throwTargetFielder = cover;
+      pl.pendingThrowTargetPos = cover.pos.clone().setY(1.35);
       pl.pendingThrowTargetBase = targetBase;
       setTicker(abandonedDP
-        ? `${f.id} 看游擊手還沒補位到二壘，放棄雙殺直接快傳一壘！`
-        : `${f.id} 接到滾地球，墊步準備傳${['本', '一', '二', '三', '本'][targetBase]}壘！`);
+        ? `${f.id} 看游擊手還沒補位到二壘，放棄雙殺快傳補位一壘的 ${cover.id}！`
+        : `${f.id} 接到滾地球，傳給補位${['本', '一', '二', '三', '本'][targetBase]}壘的 ${cover.id}！`);
     }
   } else {
     pl.throwDelay = 0.44;
     const targetBase = getBestThrowTargetBase(false);
     const bName = ['本', '一', '二', '三', '本'][targetBase];
     const runnerAdvancing = hasRunnerMovingTo(targetBase);
-    if (!runnerAdvancing || f.pos.z > 84) {
+    const cover = runnerAdvancing ? getBaseCoverFielder(targetBase, f.id) : null;
+    if (!runnerAdvancing || !cover || f.pos.z > 84) {
       const cutoff = getCutoffFielder(f.pos);
       pl.relayActive = true;
       pl.cutoffFielder = cutoff;
@@ -1922,9 +1987,10 @@ function handleAIFieldGroundBall(f) {
       setTicker(runnerAdvancing ? `${f.id} 撿到球，傳給 ${cutoff.id} 準備轉傳${bName}壘！` : `${f.id} 撿到球，穩穩回傳給最近的 ${cutoff.id}！`);
     } else {
       pl.relayActive = false;
-      pl.pendingThrowTargetPos = BASES[targetBase % 4].clone().setY(1.2);
+      pl.throwTargetFielder = cover;
+      pl.pendingThrowTargetPos = cover.pos.clone().setY(1.35);
       pl.pendingThrowTargetBase = targetBase;
-      setTicker(`${f.id} 往前撿球，直接長傳${bName}壘！`);
+      setTicker(`${f.id} 往前撿球，直傳補位${bName}壘的 ${cover.id}！`);
     }
   }
 }
@@ -1950,15 +2016,46 @@ function resolveThrowArrival() {
       return;
     }
     const bName = ['本', '一', '二', '三', '本'][tb];
+    const cover = getBaseCoverFielder(tb, pl.cutoffFielder.id);
+    if (!cover) {
+      setTicker(`${pl.cutoffFielder.id} 接到回傳球，見${bName}壘無人補位便持球牽制！`);
+      finalizeLivePlay(false, tb);
+      return;
+    }
     pl.fielderRef = pl.cutoffFielder;
     pl.throwDelay = 0.32;
-    pl.pendingThrowTargetPos = BASES[tb % 4].clone().setY(1.2);
+    pl.throwTargetFielder = cover;
+    pl.pendingThrowTargetPos = cover.pos.clone().setY(1.35);
     pl.pendingThrowTargetBase = tb;
-    setTicker(`${pl.cutoffFielder.id} 接到轉傳球，轉身快傳${bName}壘！`);
+    setTicker(`${pl.cutoffFielder.id} 接到轉傳球，快傳補位${bName}壘的 ${cover.id}！`);
     return;
   }
 
   const tb = pl.throwTargetBase;
+  const cover = pl.throwTargetFielder;
+  pl.throwTargetFielder = null;
+
+  if (cover && cover.isPlayer) {
+    const distToBag = Math.hypot(player.pos.x - BASES[tb % 4].x, player.pos.z - BASES[tb % 4].z);
+    if (distToBag > 1.5) {
+      player.hasBall = true;
+      pl.playerCoverBase = tb;
+      const bName = ['本', '一', '二', '三', '本'][tb];
+      setBanner('接到傳球！', `快跑去踩${bName}壘包抓出局！`);
+      updateDiveBtnState();
+      return;
+    }
+  } else if (cover && !cover.isCatcher && tb >= 1 && tb <= 3) {
+    const distToBag = Math.hypot(cover.pos.x - BASES[tb % 4].x, cover.pos.z - BASES[tb % 4].z);
+    if (distToBag > 1.2) {
+      pl.fielderRef = cover;
+      pl.selfCoverBase = tb;
+      const bName = ['本', '一', '二', '三', '本'][tb];
+      setTicker(`${cover.id} 接到傳球，快步踩向${bName}壘包！`);
+      return;
+    }
+  }
+
   let gotOut = false;
 
   liveRunners.forEach(r => {
