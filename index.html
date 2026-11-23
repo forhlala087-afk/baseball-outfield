@@ -832,10 +832,9 @@ const practiceScore = document.getElementById('practice-score');
 
 btnSwing.addEventListener('pointerdown', e => { e.preventDefault(); swingBat(); });
 btnSteal.addEventListener('pointerdown', e => { e.preventDefault(); attemptSteal(); });
-btnRun.addEventListener('pointerdown', e => { e.preventDefault(); holdRun = true; });
+btnRun.addEventListener('pointerdown', e => { e.preventDefault(); btnRun.setPointerCapture(e.pointerId); holdRun = true; });
 btnRun.addEventListener('pointerup', () => { holdRun = false; });
 btnRun.addEventListener('pointercancel', () => { holdRun = false; });
-btnRun.addEventListener('pointerleave', () => { holdRun = false; });
 
 function setTicker(msg) { ticker.textContent = msg; }
 function setBanner(title, sub = '') { bannerTitle.textContent = title; bannerSub.textContent = sub; }
@@ -1629,7 +1628,15 @@ function updateLivePlay(dt, now) {
 
   let anyMoving = false;
   liveRunners.forEach(r => {
-    if (r.out || r.scored || r.stopped) return;
+    if (r.out || r.scored) return;
+    if (r.stopped) {
+      if (r.isMe && isPlayerOffense() && holdRun && r.baseFrom < 4) {
+        r.stopped = false;
+        r.baseTo = r.baseFrom + 1;
+      } else {
+        return;
+      }
+    }
 
     const isAirFly = !pl.landed && !pl.flyCaught && pl.la > 8;
     const forcedNow = r.isForced && pl.landed && !pl.flyCaught;
@@ -1652,6 +1659,9 @@ function updateLivePlay(dt, now) {
     }
 
     if (r.retreating) {
+      if (r.isMe && isPlayerOffense() && holdRun && !r.leftEarly) {
+        r.retreating = false;
+      } else {
       r.progress -= r.speed * 1.25 * dt;
       const cur = new THREE.Vector3().lerpVectors(BASES[r.baseFrom % 4], BASES[r.baseTo % 4], Math.max(0, r.progress));
       if (r.isMe && isPlayerOffense()) {
@@ -1670,6 +1680,7 @@ function updateLivePlay(dt, now) {
         if (!r.isMe) r.mesh.position.copy(BASES[r.baseFrom]);
       }
       return;
+      }
     }
 
     if (r.isMe && isPlayerOffense()) {
