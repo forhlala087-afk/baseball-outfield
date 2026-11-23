@@ -1750,8 +1750,9 @@ function updateLivePlay(dt, now) {
   liveRunners.forEach((r, idx) => {
     if (r.out || r.scored) return;
 
+    if (r.startBase === undefined) r.startBase = r.baseFrom;
     const isAirFly = game.outs < 2 && !pl.landed && !pl.flyCaught && pl.la > 8;
-    const forcedNow = !pl.flyCaught && (game.outs === 2 || (r.isForced && pl.landed));
+    const forcedNow = !pl.flyCaught && r.isForced && (pl.landed || game.outs === 2);
 
     // 檢查後面有沒有跑者正在往自己原本的壘包衝（被後位跑者推著走）
     const pushedByTrailer = liveRunners.slice(idx + 1).some(tr =>
@@ -1768,7 +1769,7 @@ function updateLivePlay(dt, now) {
       }
     }
 
-    // 高飛球還沒落地時，AI 跑者先留在壘包等接殺（不亂衝）
+    // 高飛球還沒落地時，AI 跑者先留在壘包等接殺（兩出局則直接起跑）
     if (isAirFly && !r.isBatter && !r.isMe) return;
 
     // 接殺後若還沒離壘，二三壘深遠飛球 AI 會嘗試 Tag-up 推進，否則留壘
@@ -1776,8 +1777,8 @@ function updateLivePlay(dt, now) {
       if (r.baseFrom < 2 || state.ballPos.z < 88) { r.stopped = true; return; }
     }
 
-    // 非強迫進壘、且沒有被後位跑者推著走時，才允許回壘（外野安打時三壘跑者直接衝本壘不縮回去）
-    const scoringOnOFHit = !r.isMe && r.baseFrom === 3 && pl.landed && !pl.flyCaught && state.ballPos.z > 42;
+    // 野手接到球後，非強迫進壘的跑者（包含兩出局已繞過三壘的跑者）依是否過 1/2 決定回壘或繼續衝
+    const scoringOnOFHit = !r.isMe && r.startBase === 3 && r.baseFrom === 3 && pl.landed && !pl.flyCaught && state.ballPos.z > 42;
     if (r.baseFrom >= 1 && !r.retreating && !forcedNow && !pushedByTrailer && !scoringOnOFHit) {
       if (r.isMe && isPlayerOffense()) {
         if (!holdRun && r.progress > 0.03 && r.progress < 0.5) r.retreating = true;
@@ -1821,7 +1822,8 @@ function updateLivePlay(dt, now) {
     }
 
     if (r.isMe && isPlayerOffense()) {
-      const spd = ((r.baseFrom === 0 || forcedNow || holdRun) ? 0.32 : 0.0) * speedScale;
+      const twoOutAutoRun = game.outs === 2 && !pl.landed && !pl.fielded;
+      const spd = ((r.baseFrom === 0 || forcedNow || twoOutAutoRun || holdRun) ? 0.32 : 0.0) * speedScale;
       r.progress += spd * dt;
       const cur = new THREE.Vector3().lerpVectors(BASES[r.baseFrom % 4], BASES[r.baseTo % 4], Math.min(1, r.progress));
       cur.y = 1.65 + (spd > 0 ? Math.sin(now * 0.022) * 0.08 : 0);
