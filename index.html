@@ -214,7 +214,7 @@
 <div id="hud-top">
   <div class="panel">
     <div class="mode-tabs">
-      <button class="btn active" id="mode-game">比賽模式(3棒CF)</button>
+      <button class="btn active" id="mode-game">比賽模式</button>
       <button class="btn" id="mode-chase">追接</button>
       <button class="btn" id="mode-quiz">前？後？</button>
       <button class="btn" id="toggle-marker">落點：關</button>
@@ -1545,7 +1545,9 @@ function updateLivePlay(dt, now) {
       pl.throwTo = pl.relayActive && pl.cutoffFielder ? pl.cutoffFielder.pos.clone().setY(1.4) : pl.pendingThrowTargetPos.clone();
       pl.throwTargetBase = pl.pendingThrowTargetBase;
       pl.throwT = 0;
-      pl.throwDur = Math.max(0.4, pl.throwFrom.distanceTo(pl.throwTo) / 35);
+      const throwDist = pl.throwFrom.distanceTo(pl.throwTo);
+      pl.throwDur = Math.max(0.42, throwDist / 32 + Math.max(0, throwDist - 40) * 0.014);
+      pl.throwArc = Math.max(1.2, throwDist * 0.085);
       pl.pendingFromPlayer = false;
       AudioFX.tone(520, 0.08);
     }
@@ -1632,7 +1634,7 @@ function updateLivePlay(dt, now) {
     pl.throwT += dt;
     const p = Math.min(1, pl.throwT / pl.throwDur);
     ballMesh.position.lerpVectors(pl.throwFrom, pl.throwTo, p);
-    ballMesh.position.y += Math.sin(p * Math.PI) * 1.4;
+    ballMesh.position.y += Math.sin(p * Math.PI) * (pl.throwArc || 1.4);
     ballShadow.position.set(ballMesh.position.x, 0.07, ballMesh.position.z);
     if (p >= 1) {
       AudioFX.glovePop();
@@ -1645,8 +1647,8 @@ function updateLivePlay(dt, now) {
   liveRunners.forEach((r, idx) => {
     if (r.out || r.scored) return;
 
-    const isAirFly = !pl.landed && !pl.flyCaught && pl.la > 8;
-    const forcedNow = r.isForced && pl.landed && !pl.flyCaught;
+    const isAirFly = game.outs < 2 && !pl.landed && !pl.flyCaught && pl.la > 8;
+    const forcedNow = !pl.flyCaught && (game.outs === 2 || (r.isForced && pl.landed));
 
     // 檢查後面有沒有跑者正在往自己原本的壘包衝（被後位跑者推著走）
     const pushedByTrailer = liveRunners.slice(idx + 1).some(tr =>
@@ -2263,7 +2265,7 @@ function switchMode(newMode) {
     gameBug.style.display = 'block'; practiceScore.style.display = 'none'; ticker.style.display = 'none';
     document.getElementById('setup-panel').style.display = 'block';
     document.getElementById('btn-start').textContent = 'PLAY BALL！（Space）';
-    setBanner('3棒 中外野手', '完整九局第一人稱比賽｜守備・休息室・打擊・跑壘');
+    updateSetupBanner();
     resetPlayerCF(); updateGameUI();
   } else {
     gameBug.style.display = 'none'; practiceScore.style.display = 'flex'; ticker.style.display = 'none';
@@ -2275,6 +2277,13 @@ function switchMode(newMode) {
   }
 }
 
+function updateSetupBanner() {
+  const pos = document.getElementById('sel-pos').value;
+  const ord = document.getElementById('sel-order').value;
+  setBanner(`${ord}棒 ${POS_MAP[pos].name}`, '完整九局第一人稱比賽｜守備・休息室・打擊・跑壘');
+}
+document.getElementById('sel-pos').onchange = updateSetupBanner;
+document.getElementById('sel-order').onchange = updateSetupBanner;
 document.getElementById('mode-game').onclick = () => switchMode('game');
 document.getElementById('mode-chase').onclick = () => switchMode('chase');
 document.getElementById('mode-quiz').onclick = () => switchMode('quiz');
