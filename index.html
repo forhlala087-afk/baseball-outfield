@@ -184,16 +184,37 @@
     margin-left: -26px; margin-top: -26px; border-radius: 50%;
     background: rgba(255,255,255,0.45); border: 2px solid #fff;
   }
-  #dive-btn {
-    position: absolute; right: 20px; bottom: max(40px, env(safe-area-inset-bottom) + 22px);
-    width: 88px; height: 88px; border-radius: 50%;
-    background: rgba(255, 152, 0, 0.84); border: 2px solid #ffe0b2;
-    color: #fff; font-size: 15px; font-weight: 900; pointer-events: auto; cursor: pointer;
-    box-shadow: 0 4px 16px rgba(0,0,0,0.45); line-height: 1.15; padding: 4px;
+  #def-pad {
+    position: absolute; right: 14px; bottom: max(22px, env(safe-area-inset-bottom) + 12px);
+    width: 148px; height: 148px; pointer-events: none;
   }
-  #dive-btn:active { transform: scale(0.92); }
+  #dive-btn {
+    position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+    width: 64px; height: 64px; border-radius: 50%;
+    background: rgba(255, 152, 0, 0.86); border: 2px solid #ffe0b2;
+    color: #fff; font-size: 13px; font-weight: 900; pointer-events: auto; cursor: pointer;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.45); line-height: 1.15; padding: 2px;
+  }
+  #dive-btn:active { transform: translate(-50%, -50%) scale(0.92); }
   #dive-btn.pickup { background: rgba(30, 136, 229, 0.9); border-color: #bbdefb; }
   #dive-btn.throw { background: rgba(229, 57, 53, 0.92); border-color: #ffcdd2; }
+  .base-throw-btn {
+    position: absolute; width: 44px; height: 44px; border-radius: 50%;
+    background: rgba(15, 28, 46, 0.72); border: 2px solid rgba(255,255,255,0.32);
+    color: #fff; font-size: 15px; font-weight: 900; pointer-events: auto; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    opacity: 0.35; transition: opacity 0.15s, transform 0.1s;
+    box-shadow: 0 3px 10px rgba(0,0,0,0.4);
+  }
+  .base-throw-btn:active { transform: scale(0.9); }
+  .base-throw-btn.ready {
+    opacity: 1; background: rgba(229, 57, 53, 0.92); border-color: #ffcdd2;
+    box-shadow: 0 0 10px rgba(229, 57, 53, 0.7);
+  }
+  #btn-th-3 { top: 0; left: 0; }
+  #btn-th-2 { top: 0; right: 0; }
+  #btn-th-4 { bottom: 0; left: 0; }
+  #btn-th-1 { bottom: 0; right: 0; }
 
   #start-btn-wrap { position: fixed; bottom: 20%; left: 50%; transform: translateX(-50%); z-index: 16; }
   #minimap {
@@ -323,7 +344,13 @@
 
 <div id="touch-controls">
   <div id="joy-zone"><div id="joy-knob"></div></div>
-  <button id="dive-btn">撲接</button>
+  <div id="def-pad">
+    <button class="base-throw-btn" id="btn-th-3" data-base="3">三</button>
+    <button class="base-throw-btn" id="btn-th-2" data-base="2">二</button>
+    <button class="base-throw-btn" id="btn-th-4" data-base="4">本</button>
+    <button class="base-throw-btn" id="btn-th-1" data-base="1">一</button>
+    <button id="dive-btn">撲接</button>
+  </div>
 </div>
 
 <div id="bottom-bar">WASD / 搖桿守備 ｜ Space 揮棒・撲接・撿球回傳・跑壘</div>
@@ -779,6 +806,12 @@ window.addEventListener('keydown', e => {
       else if (state.phase === 'IN_FLIGHT' && state.mode === 'chase') triggerDive();
     }
   }
+  if (state.mode === 'game' && game.subPhase === 'LIVE_PLAY' && isPlayerDefense() && player.hasBall) {
+    if (e.code === 'Digit1' || e.code === 'Numpad1') throwBallFromCF(1, false);
+    else if (e.code === 'Digit2' || e.code === 'Numpad2') throwBallFromCF(2, false);
+    else if (e.code === 'Digit3' || e.code === 'Numpad3') throwBallFromCF(3, false);
+    else if (e.code === 'Digit4' || e.code === 'Numpad4') throwBallFromCF(4, false);
+  }
   if (state.phase === 'QUIZ_WAIT') {
     if (e.code === 'ArrowUp' || e.code === 'KeyW') submitQuiz('front');
     if (e.code === 'ArrowDown' || e.code === 'KeyS') submitQuiz('back');
@@ -815,6 +848,14 @@ diveBtn.addEventListener('pointerdown', e => {
   if (state.mode === 'chase' && state.phase === 'IN_FLIGHT') triggerDive();
   else if (state.mode === 'game' && game.subPhase === 'LIVE_PLAY' && isPlayerDefense()) handleDefenseAction();
 });
+document.querySelectorAll('.base-throw-btn').forEach(btn => {
+  btn.addEventListener('pointerdown', e => {
+    e.preventDefault();
+    if (state.mode === 'game' && game.subPhase === 'LIVE_PLAY' && isPlayerDefense() && player.hasBall) {
+      throwBallFromCF(parseInt(btn.dataset.base, 10), false);
+    }
+  });
+});
 
 const btnSwing = document.getElementById('btn-swing');
 const btnSteal = document.getElementById('btn-steal');
@@ -844,20 +885,24 @@ function getOppOrder() { return game.playerSide === 'home' ? game.awayOrder : ga
 
 function updateDiveBtnState() {
   diveBtn.className = '';
+  const showBaseBtns = state.mode === 'game' && isPlayerDefense();
+  document.querySelectorAll('.base-throw-btn').forEach(b => {
+    b.style.display = showBaseBtns ? 'flex' : 'none';
+    b.classList.toggle('ready', showBaseBtns && player.hasBall && game.subPhase === 'LIVE_PLAY');
+  });
   if (state.mode !== 'game' || game.subPhase !== 'LIVE_PLAY' || !isPlayerDefense() || !game.play) {
     diveBtn.textContent = '撲接';
     return;
   }
   if (player.hasBall) {
-    const tb = getBestThrowTargetBase(true);
-    const prog = getRunnerProgressTo(tb);
-    const canDirect = game.playerPos === 'SS' || (player.pos.z <= 88 && prog >= 0.25 && prog <= 0.75);
-    const bName = ['本壘', '一壘', '二壘', '三壘', '本壘'][tb];
-    if (canDirect) diveBtn.textContent = `直傳\n${bName}`;
-    else if (prog >= 0 && prog < 0.25) diveBtn.textContent = `轉傳\n${bName}`;
-    else diveBtn.textContent = '回傳\nCutoff';
-    diveBtn.classList.add('throw');
-  }else if (game.play.landed && !game.play.fielded) {
+    if (game.playerPos === 'SS') {
+      diveBtn.textContent = '選壘\n傳球';
+      diveBtn.classList.add('pickup');
+    } else {
+      diveBtn.textContent = '轉傳';
+      diveBtn.classList.add('throw');
+    }
+  } else if (game.play.landed && !game.play.fielded) {
     diveBtn.textContent = '撿球';
     diveBtn.classList.add('pickup');
   } else {
@@ -977,7 +1022,11 @@ function triggerDive() {
 function handleDefenseAction() {
   if (!game.play) return;
   if (player.hasBall) {
-    throwBallFromCF();
+    if (game.playerPos === 'SS') {
+      setBanner('請選擇傳球壘包！', '按四角的 一 / 二 / 三 / 本（或鍵盤 1~4）');
+    } else {
+      throwBallFromCF(0, true);
+    }
   } else if (game.play.landed && !game.play.fielded) {
     const d = Math.hypot(state.ballPos.x - player.pos.x, state.ballPos.z - player.pos.z);
     if (d < 4.0) pickUpBallCF();
@@ -991,8 +1040,9 @@ function pickUpBallCF() {
   game.play.fielded = true;
   player.hasBall = true;
   AudioFX.glovePop();
-  const isRelay = game.playerPos !== 'SS' && player.pos.z > 88;
-  setBanner('撿到球了！', isRelay ? '距離較遠！按「轉傳 / Space」傳給咖抖內野手！' : '快按「直傳 / Space」直傳壘包！');
+  setBanner('撿到球了！', game.playerPos === 'SS'
+    ? '按 一 / 二 / 三 / 本（或數字鍵 1~4）傳球！'
+    : '按 一 / 二 / 三 / 本 直傳，或中間「轉傳」！');
   updateDiveBtnState();
 }
 
@@ -1060,53 +1110,39 @@ function getBaseCoverFielder(tb, excludeId = '') {
   return best;
 }
 
-function throwBallFromCF() {
+function throwBallFromCF(manualBase = 0, forceCutoff = false) {
   if (!player.hasBall || !game.play) return;
   player.hasBall = false;
   const pl = game.play;
-  const targetBase = getBestThrowTargetBase(true);
-  const bName = ['本壘', '一壘', '二壘', '三壘', '本壘'][targetBase];
-  const prog = getRunnerProgressTo(targetBase);
-  const canDirectThrow = prog >= 0.25 && prog <= 0.75 && player.pos.z <= 88;
-  const wantRelayOut = prog >= 0 && prog <= 0.75;
-  const isRelay = game.playerPos !== 'SS' && !canDirectThrow;
-
+  pl.waitingEnd = false;
+  pl.endCooldown = 0;
+  pl.playerCoverBase = 0;
   pl.throwDelay = 0.22;
   pl.fielderRef = null;
   pl.pendingFromPlayer = true;
 
-  if (isRelay) {
+  if (forceCutoff || manualBase === 0) {
     const cutoff = getCutoffFielder(player.pos);
+    const targetBase = getBestThrowTargetBase(false);
     pl.relayActive = true;
     pl.cutoffFielder = cutoff;
     pl.relayFinalBase = targetBase;
     pl.pendingThrowTargetPos = cutoff.pos.clone().setY(1.4);
     pl.pendingThrowTargetBase = -1;
-    const msg = wantRelayOut
-      ? `傳給 ${cutoff.id} 轉傳${bName}！`
-      : (prog > 0.75 ? `跑者已逼近${bName}，改回傳給最近的 ${cutoff.id}！` : `回傳給最近的 ${cutoff.id}！`);
-    setBanner(msg, '');
+    setBanner(`轉傳給最近的 ${cutoff.id}！`, '');
   } else {
+    const targetBase = manualBase;
+    const bName = ['本壘', '一壘', '二壘', '三壘', '本壘'][targetBase];
     const cover = getBaseCoverFielder(targetBase, 'PLAYER');
-    if (!cover) {
-      const cutoff = getCutoffFielder(player.pos);
-      pl.relayActive = true;
-      pl.cutoffFielder = cutoff;
-      pl.relayFinalBase = targetBase;
-      pl.pendingThrowTargetPos = cutoff.pos.clone().setY(1.4);
-      pl.pendingThrowTargetBase = -1;
-      setBanner(`見${bName}無人補位，改傳給 ${cutoff.id}！`, '');
-    } else {
-      pl.relayActive = false;
-      pl.throwTargetFielder = cover;
-      pl.pendingThrowTargetPos = cover.pos.clone().setY(1.35);
-      pl.pendingThrowTargetBase = targetBase;
-      if (game.playerPos === 'SS' && targetBase === 2 && game.bases[0] && game.outs < 2 && !pl.dpCoverDone) {
-        pl.dpSecondThrow = true;
-        pl.fielderId = 'SS';
-      }
-      setBanner(`直傳補位${bName}的 ${cover.id}！`, '');
+    pl.relayActive = false;
+    pl.throwTargetFielder = cover;
+    pl.pendingThrowTargetPos = cover ? cover.pos.clone().setY(1.35) : BASES[targetBase % 4].clone().setY(1.2);
+    pl.pendingThrowTargetBase = targetBase;
+    if (game.playerPos === 'SS' && targetBase === 2 && game.bases[0] && game.outs < 2 && !pl.dpCoverDone && !pl.flyCaught) {
+      pl.dpSecondThrow = true;
+      pl.fielderId = 'SS';
     }
+    setBanner(cover ? `直傳${bName}（${cover.id}）！` : `直傳${bName}！`, '');
   }
   updateDiveBtnState();
 }
@@ -1731,6 +1767,7 @@ function updateLivePlay(dt, now) {
         const tb = pl.playerCoverBase;
         pl.playerCoverBase = 0;
         pl.throwTargetBase = tb;
+        pl.throwTargetFielder = { id: 'SS(你)', pos: player.pos, isPlayer: true, steppedBag: true };
         player.hasBall = false;
         resolveThrowArrival();
         return;
@@ -1862,13 +1899,14 @@ function updateLivePlay(dt, now) {
       const gaze = runDir.dot(ballDir) > -0.25 ? baseLook.clone().lerp(ballMesh.position, 0.55) : baseLook;
       lookTarget.lerp(gaze, 0.16);
       camera.lookAt(lookTarget);
+      if (spd > 0) anyMoving = true;
     } else {
       r.progress += r.speed * speedScale * dt;
       const cur = new THREE.Vector3().lerpVectors(BASES[r.baseFrom % 4], BASES[r.baseTo % 4], Math.min(1, r.progress));
       cur.y = Math.abs(Math.sin(now * 0.018)) * 0.14;
       r.mesh.position.copy(cur);
+      anyMoving = true;
     }
-    anyMoving = true;
 
     if (r.progress >= 1) {
       r.baseFrom = r.baseTo;
@@ -1893,8 +1931,21 @@ function updateLivePlay(dt, now) {
     camera.lookAt(lookTarget);
   }
 
-  if (pl.elapsed > 14 || (!anyMoving && pl.fielded && !pl.throwActive && pl.throwDelay <= 0 && !player.hasBall && !pl.selfCoverBase)) {
-    finalizeLivePlay();
+  const totalOutsNow = game.outs + liveRunners.filter(r => r.out).length;
+  if (pl.elapsed > 18) {
+    finalizeLivePlay(pl.lastGotOut, pl.lastOutBase || 1);
+  } else if (pl.fielded && !pl.throwActive && pl.throwDelay <= 0 && !pl.selfCoverBase && !pl.playerCoverBase) {
+    if (totalOutsNow >= 3) {
+      finalizeLivePlay(pl.lastGotOut, pl.lastOutBase || 1);
+    } else if (!anyMoving) {
+      if (!pl.waitingEnd) {
+        pl.waitingEnd = true;
+        pl.endCooldown = 1.5;
+      } else {
+        pl.endCooldown -= dt;
+        if (pl.endCooldown <= 0) finalizeLivePlay(pl.lastGotOut, pl.lastOutBase || 1);
+      }
+    }
   }
 }
 
@@ -1910,7 +1961,8 @@ function handleFlyOut(fielderId, isPlayerCF) {
   if (batter) { batter.out = true; batter.mesh.visible = false; }
 
   const onBase = liveRunners.filter(r => !r.isBatter && !r.out);
-  if (onBase.length === 0 || game.outs + 1 >= 3) {
+  // 已經三出局就直接結束
+  if (game.outs + 1 >= 3) {
     pl.resolved = true;
     btnRun.style.display = 'none';
     setBanner(isPlayerCF && player.diving ? '美技撲接！' : '接殺出局！', `${fielderId} 穩穩接殺`);
@@ -1927,7 +1979,6 @@ function handleFlyOut(fielderId, isPlayerCF) {
       r.retreating = true;
       targetBase = r.baseFrom;
     } else if (!r.isMe && r.progress > 0.02) {
-      // 剛剛先跑出來約 1/3 看球的 AI，看到被接殺立刻趕回原壘包
       r.retreating = true;
     } else if (r.baseFrom >= 2 && state.ballPos.z >= 82 && pl.la >= 20) {
       targetBase = Math.max(targetBase, r.baseTo);
@@ -1936,40 +1987,41 @@ function handleFlyOut(fielderId, isPlayerCF) {
     }
   });
 
-  // 如果沒有人提早離壘，也沒有二三壘跑者要拚推進
-  if (targetBase === 0) {
-    btnRun.style.display = 'none';
-    if (onBase.some(r => r.retreating)) {
-      pl.flyNoThrow = true;
-      onBase.forEach(r => { if (!r.retreating) r.stopped = true; });
-      setBanner(isPlayerCF && player.diving ? '美技撲接！' : '接殺出局！', `${fielderId} 接殺，跑者趕快回壘`);
-      updateGameUI();
-      return;
-    }
-    pl.resolved = true;
-    setBanner(isPlayerCF && player.diving ? '美技撲接！' : '接殺出局！', `${fielderId} 穩穩接殺`);
-    if (!addOut(`${fielderId} 飛球接殺出局！`)) { nextBatter(); enterAfterPause(1.4); }
+  if (isPlayerCF) {
+    player.hasBall = true;
+    pl.waitingEnd = true;
+    pl.endCooldown = 1.5;
+    setBanner(player.diving ? '美技撲接！' : '接殺出局！', onBase.length > 0 ? '可按 一/二/三/本 或轉傳（1.5秒後結算）' : '接殺出局！（1.5秒後結算）');
+    setTicker(`${fielderId} 飛球接殺出局！`);
+    updateDiveBtnState();
     updateGameUI();
     return;
   }
 
-  if (isPlayerCF) {
-    player.hasBall = true;
-    setBanner('接殺出局！快回傳！', '按「回傳 / Space」防止跑者推進或抓雙殺！');
-    updateDiveBtnState();
-  } else {
-    const f = getFielderById(fielderId);
-    pl.fielderRef = f;
-    pl.throwDelay = 0.38;
-    pl.relayActive = false;
-    pl.pendingThrowTargetPos = BASES[targetBase % 4].clone().setY(1.2);
-    pl.pendingThrowTargetBase = targetBase;
-    setBanner('接殺出局！', meRunning ? '可按住衝刺拚 Tag-up 推進，提早離壘快回壘！' : `${fielderId} 接殺後回傳牽制跑者`);
-    setTicker(`${fielderId} 接殺出局！回傳${['本', '一', '二', '三', '本'][targetBase]}壘！`);
+  if (targetBase === 0) {
+    btnRun.style.display = 'none';
+    pl.flyNoThrow = true;
+    pl.waitingEnd = true;
+    pl.endCooldown = 1.5;
+    onBase.forEach(r => { if (!r.retreating) r.stopped = true; });
+    setBanner('接殺出局！', `${fielderId} 穩穩接殺`);
+    setTicker(`${fielderId} 飛球接殺出局！`);
+    updateGameUI();
+    return;
   }
+
+  const f = getFielderById(fielderId);
+  const cover = getBaseCoverFielder(targetBase, fielderId);
+  pl.fielderRef = f;
+  pl.throwDelay = 0.38;
+  pl.relayActive = false;
+  pl.throwTargetFielder = cover;
+  pl.pendingThrowTargetPos = cover ? cover.pos.clone().setY(1.35) : BASES[targetBase % 4].clone().setY(1.2);
+  pl.pendingThrowTargetBase = targetBase;
+  setBanner('接殺出局！', meRunning ? '可按住衝刺拚 Tag-up 推進，提早離壘快回壘！' : `${fielderId} 接殺後回傳牽制跑者`);
+  setTicker(`${fielderId} 接殺出局！回傳${['本', '一', '二', '三', '本'][targetBase]}壘！`);
   updateGameUI();
 }
-
 function handleAIFieldGroundBall(f) {
   const pl = game.play;
   pl.fielded = true;
@@ -2049,24 +2101,28 @@ function resolveThrowArrival() {
   if (pl.relayActive) {
     pl.relayActive = false;
     const tb = getBestThrowTargetBase(false);
-    if (!hasRunnerMovingTo(tb)) {
-      setTicker(`${pl.cutoffFielder.id} 接到回傳球，跑者停止推進！`);
-      finalizeLivePlay(false, tb);
-      return;
-    }
     if (pl.cutoffFielder.isPlayer) {
       pl.isRelayThrow = true;
       player.hasBall = true;
+      pl.waitingEnd = true;
+      pl.endCooldown = 1.5;
       const bName = ['本', '一', '二', '三', '本'][tb];
-      setBanner('接到轉傳球！', `快按「直傳${bName}壘 / Space」抓跑者！`);
+      setBanner('接到轉傳球！', hasRunnerMovingTo(tb) ? `快按 一/二/三/本 抓跑者！（建議${bName}壘）` : '跑者停止推進，可續傳（1.5秒後結算）');
       updateDiveBtnState();
+      return;
+    }
+    if (!hasRunnerMovingTo(tb)) {
+      setTicker(`${pl.cutoffFielder.id} 接到回傳球，跑者停止推進！`);
+      pl.waitingEnd = true;
+      pl.endCooldown = 1.5;
       return;
     }
     const bName = ['本', '一', '二', '三', '本'][tb];
     const cover = getBaseCoverFielder(tb, pl.cutoffFielder.id);
     if (!cover) {
       setTicker(`${pl.cutoffFielder.id} 接到回傳球，見${bName}壘無人補位便持球牽制！`);
-      finalizeLivePlay(false, tb);
+      pl.waitingEnd = true;
+      pl.endCooldown = 1.5;
       return;
     }
     pl.fielderRef = pl.cutoffFielder;
@@ -2082,7 +2138,7 @@ function resolveThrowArrival() {
   const cover = pl.throwTargetFielder;
   pl.throwTargetFielder = null;
 
-  if (cover && cover.isPlayer) {
+  if (cover && cover.isPlayer && !cover.steppedBag) {
     const distToBag = Math.hypot(player.pos.x - BASES[tb % 4].x, player.pos.z - BASES[tb % 4].z);
     if (distToBag > 1.5) {
       player.hasBall = true;
@@ -2092,7 +2148,7 @@ function resolveThrowArrival() {
       updateDiveBtnState();
       return;
     }
-  } else if (cover && !cover.isCatcher && tb >= 1 && tb <= 3) {
+  } else if (cover && !cover.isCatcher && !cover.isPlayer && tb >= 1 && tb <= 3) {
     const distToBag = Math.hypot(cover.pos.x - BASES[tb % 4].x, cover.pos.z - BASES[tb % 4].z);
     if (distToBag > 1.2) {
       pl.fielderRef = cover;
@@ -2104,11 +2160,10 @@ function resolveThrowArrival() {
   }
 
   let gotOut = false;
-
   liveRunners.forEach(r => {
     if (r.out || r.scored) return;
     const isForcePlay = r.isForced && !pl.flyCaught;
-    const minProg = isForcePlay ? 0.15 : 0.5;
+    const minProg = isForcePlay ? 0.05 : 0.5;
     const caughtAdvancing = !r.retreating && r.baseTo === tb && r.progress > minProg && r.progress < 0.99;
     const caughtOffBase = r.leftEarly && r.baseFrom === tb && r.progress > 0.05;
     if (caughtAdvancing || caughtOffBase) {
@@ -2120,40 +2175,68 @@ function resolveThrowArrival() {
     }
   });
 
-  if (pl.dpSecondThrow && tb === 2 && gotOut) {
-    pl.dpSecondThrow = false;
-    if (isPlayerDefense() && game.playerPos === 'SS' && (pl.fielderId === '1B' || pl.fielderId === '2B')) {
-      pl.dpCoverDone = true;
-      player.hasBall = true;
-      setBanner('二壘封殺！', '快按「直傳一壘 / Space」完成雙殺！');
-      updateDiveBtnState();
-      return;
-    }
-    const cover2B = getFielderById(pl.fielderId === 'SS' ? '2B' : 'SS');
-    pl.fielderRef = cover2B;
-    pl.throwDelay = 0.28;
-    pl.pendingThrowTargetPos = BASES[1].clone().setY(1.2);
-    pl.pendingThrowTargetBase = 1;
-    setTicker('二壘封殺！轉身快傳一壘拚雙殺！');
-    return;
+  if (gotOut) {
+    pl.lastGotOut = true;
+    pl.lastOutBase = tb;
   }
 
   const totalOutsNow = game.outs + liveRunners.filter(r => r.out).length;
-  const advancing = liveRunners.filter(r => !r.out && !r.scored && !r.stopped && !r.retreating && r.progress > 0.1 && r.baseTo !== tb);
-  if (totalOutsNow < 3 && advancing.length > 0 && (pl.extraThrows || 0) < 2) {
-    pl.extraThrows = (pl.extraThrows || 0) + 1;
-    const nextTb = advancing[0].baseTo;
-    const fromName = ['本', '一', '二', '三', '本'][tb];
-    const toName = ['本', '一', '二', '三', '本'][nextTb];
-    pl.fielderRef = { pos: BASES[tb % 4] };
-    pl.throwDelay = 0.32;
-    pl.pendingThrowTargetPos = BASES[nextTb % 4].clone().setY(1.2);
-    pl.pendingThrowTargetBase = nextTb;
-    setTicker(`${fromName}壘接到球！發現跑者還在衝，轉身快傳${toName}壘！`);
+  if (totalOutsNow >= 3) {
+    finalizeLivePlay(pl.lastGotOut, pl.lastOutBase || tb);
     return;
   }
 
-  finalizeLivePlay(gotOut, tb);
+  if (cover && cover.isPlayer) {
+    pl.dpSecondThrow = false;
+    pl.dpCoverDone = true;
+    player.hasBall = true;
+    pl.waitingEnd = true;
+    pl.endCooldown = 1.5;
+    const bName = ['本', '一', '二', '三', '本'][tb];
+    setBanner(gotOut ? `${bName}壘封殺！` : '接到傳球！', '可按 一/二/三/本 繼續傳球（1.5秒後結算）');
+    updateDiveBtnState();
+    return;
+  }
+
+  if (pl.dpSecondThrow && tb === 2 && gotOut) {
+    pl.dpSecondThrow = false;
+    const cover2B = getFielderById(pl.fielderId === 'SS' ? '2B' : 'SS');
+    const cover1B = getBaseCoverFielder(1, cover2B.id);
+    if (cover1B) {
+      pl.fielderRef = cover2B;
+      pl.throwDelay = 0.28;
+      pl.throwTargetFielder = cover1B;
+      pl.pendingThrowTargetPos = cover1B.pos.clone().setY(1.35);
+      pl.pendingThrowTargetBase = 1;
+      setTicker(`二壘封殺！轉身快傳補位一壘的 ${cover1B.id} 拚雙殺！`);
+      return;
+    }
+  }
+
+  const advancing = liveRunners.filter(r => !r.out && !r.scored && !r.stopped && !r.retreating && r.progress > 0.1 && r.baseTo !== tb);
+  if (advancing.length > 0 && (pl.extraThrows || 0) < 2) {
+    const nextTb = advancing[0].baseTo;
+    const nextCover = getBaseCoverFielder(nextTb, '');
+    if (nextCover) {
+      pl.extraThrows = (pl.extraThrows || 0) + 1;
+      const fromName = ['本', '一', '二', '三', '本'][tb];
+      const toName = ['本', '一', '二', '三', '本'][nextTb];
+      pl.fielderRef = { pos: BASES[tb % 4] };
+      pl.throwDelay = 0.32;
+      pl.throwTargetFielder = nextCover;
+      pl.pendingThrowTargetPos = nextCover.pos.clone().setY(1.35);
+      pl.pendingThrowTargetBase = nextTb;
+      setTicker(`${fromName}壘接到球！發現跑者還在衝，轉身快傳補位${toName}壘的 ${nextCover.id}！`);
+      return;
+    }
+  }
+
+  if (gotOut) {
+    const bName = ['本', '一', '二', '三', '本'][tb];
+    setTicker(`${bName}壘出局！`);
+  }
+  pl.waitingEnd = true;
+  pl.endCooldown = 1.5;
 }
 
 function finishLivePlayHR() {
