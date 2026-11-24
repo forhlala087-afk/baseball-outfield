@@ -1373,34 +1373,34 @@ function generateBattedBallParams() {
     const spray = isSS && Math.random() < 0.45 ? (6 + Math.random() * 20) : (Math.random() * 72 - 36);
     return { ev: 36 + Math.random() * 9, la: 10 + Math.random() * 9, spray, spin: 0.9, tag: '' };
   }
-  // 刁鑽找洞飛球（專打中外野兩側空隙 ±10°~18° 或邊線角落 ±33°~41°，逼外野手大幅橫移）
-  if (r < (isSS ? 0.84 : 0.74)) {
+  // 刁鑽找洞飛球（拉高一點仰角，變成五五波拚行進間接殺）
+  if (r < (isSS ? 0.82 : 0.68)) {
     const sign = Math.random() < 0.5 ? 1 : -1;
-    let spray = sign * (Math.random() < 0.62 ? (10 + Math.random() * 8) : (33 + Math.random() * 8));
+    let spray = sign * (Math.random() < 0.65 ? (10 + Math.random() * 7) : (32 + Math.random() * 7));
     if (isOF && Math.random() < 0.55) {
-      if (game.playerPos === 'CF') spray = sign * (10 + Math.random() * 8);
-      else if (game.playerPos === 'LF') spray = Math.random() < 0.5 ? (10 + Math.random() * 7) : (33 + Math.random() * 8);
-      else if (game.playerPos === 'RF') spray = Math.random() < 0.5 ? -(10 + Math.random() * 7) : -(33 + Math.random() * 8);
+      if (game.playerPos === 'CF') spray = sign * (10 + Math.random() * 7);
+      else if (game.playerPos === 'LF') spray = Math.random() < 0.5 ? (10 + Math.random() * 7) : (32 + Math.random() * 7);
+      else if (game.playerPos === 'RF') spray = Math.random() < 0.5 ? -(10 + Math.random() * 7) : -(32 + Math.random() * 7);
     }
-    return { ev: 35 + Math.random() * 7.5, la: 15 + Math.random() * 11, spray, spin: 0.9, tag: '找洞飛球' };
+    return { ev: 35 + Math.random() * 6.5, la: 18 + Math.random() * 11, spray, spin: 0.95, tag: '找洞飛球' };
   }
-  // 越過頭頂深遠飛球／牆前長打（平快且深遠，容易飛過頭頂落地或撞牆反彈）
-  if (r < (isSS ? 0.90 : 0.86)) {
+  // 越過頭頂深遠飛球／警戒區長打（偶爾警戒區接殺、偶爾越頂撞牆）
+  if (r < (isSS ? 0.87 : 0.75)) {
+    let spray = Math.random() * 72 - 36;
+    if (isOF && Math.random() < 0.55) {
+      if (game.playerPos === 'CF') spray = Math.random() * 30 - 15;
+      else if (game.playerPos === 'LF') spray = 12 + Math.random() * 24;
+      else if (game.playerPos === 'RF') spray = -(12 + Math.random() * 24);
+    }
+    return { ev: 42.5 + Math.random() * 4.5, la: 21 + Math.random() * 8.5, spray, spin: 0.95, tag: '越頂長打' };
+  }
+  // 一般外野高飛球（壓低初速上限，維持穩定接殺與跑動接殺）
+  if (r < 0.975) {
     let spray = Math.random() * 74 - 37;
     if (isOF && Math.random() < 0.55) {
-      if (game.playerPos === 'CF') spray = Math.random() * 32 - 16;
+      if (game.playerPos === 'CF') spray = Math.random() * 26 - 13;
       else if (game.playerPos === 'LF') spray = 12 + Math.random() * 25;
       else if (game.playerPos === 'RF') spray = -(12 + Math.random() * 25);
-    }
-    return { ev: 44 + Math.random() * 4.2, la: 19 + Math.random() * 7.5, spray, spin: 0.95, tag: '越頂長打' };
-  }
-  // 一般外野高飛球（壓低初速上限，不再動不動飛出去）
-  if (r < 0.975) {
-    let spray = Math.random() * 76 - 38;
-    if (isOF && Math.random() < 0.55) {
-      if (game.playerPos === 'CF') spray = Math.random() * 28 - 14;
-      else if (game.playerPos === 'LF') spray = 12 + Math.random() * 26;
-      else if (game.playerPos === 'RF') spray = -(12 + Math.random() * 26);
     }
     return { ev: 34.5 + Math.random() * 7.5, la: 28 + Math.random() * 17, spray, spin: 1.05, tag: '' };
   }
@@ -1632,11 +1632,11 @@ function updateFieldersAndCoverage(dt) {
       moveObjToward(f.pos, BASES[pl.selfCoverBase % 4], f.speed, dt);
     } else if (!pl.fielded && (f === primaryChaser || f === bloopIF || f === bloopOF)) {
       const target = (!pl.landed && (f.type === 'OF' || pl.tag === '三不管')) ? state.meta.land : state.ballPos;
-      if (!(f.type === 'OF' && !pl.landed && pl.elapsed < 0.42)) {
+      if (!(f.type === 'OF' && !pl.landed && pl.elapsed < 0.22)) {
         let chaseSpd = f.speed;
         if (f.type === 'OF' && !pl.landed) {
-          if (target.z > f.pos.z + 2) chaseSpd *= 0.80;
-          else if (Math.abs(target.x - f.pos.x) > 8) chaseSpd *= 0.90;
+          if (target.z > f.pos.z + 2) chaseSpd *= 0.90;
+          else if (Math.abs(target.x - f.pos.x) > 8) chaseSpd *= 0.95;
         }
         moveObjToward(f.pos, target, chaseSpd, dt);
       }
