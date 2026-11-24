@@ -1250,6 +1250,7 @@ function startGameMode() {
   game.stats = { ab: 0, h: 0, hr: 0, bb: 0, rbi: 0, po: 0 };
   clearLiveRunners();
   ticker.style.display = 'block';
+  setTicker(`比賽開始！你擔任先發第 ${game.playerOrder} 棒${POS_MAP[game.playerPos].name}`);
   const sideText = game.playerSide === 'home' ? '本場擔任【主隊】先守後攻！' : '本場擔任【客隊】先攻後守！';
   setBanner('1局上半', sideText);
   game.subPhase = 'CHANGE_SIDES';
