@@ -1337,56 +1337,76 @@ function generateBattedBallParams() {
   const isOF = isPlayerDefense() && !POS_MAP[game.playerPos].isIF;
 
   // 內野高飛球（界內高飛 or 界外高飛）
-  if (r < (isSS ? 0.12 : 0.05)) {
+  if (r < (isSS ? 0.11 : 0.05)) {
     const isFoulPop = Math.random() < 0.38;
     const spray = isFoulPop ? (Math.random() > 0.5 ? 52 + Math.random() * 14 : -(52 + Math.random() * 14)) : (Math.random() * 44 - 22);
     return { ev: 20 + Math.random() * 6, la: 62 + Math.random() * 14, spray, spin: 0.4, tag: isFoulPop ? '內野界外高飛' : '內野高飛' };
   }
   // 一／三壘方向強勁滾地球（可抓雙殺）
-  if (r < (isSS ? 0.24 : 0.14)) {
+  if (r < (isSS ? 0.22 : 0.14)) {
     const sign = Math.random() < 0.5 ? -1 : 1; // -1 一壘方向, +1 三壘方向
     return { ev: 38 + Math.random() * 7, la: 2 + Math.random() * 4, spray: sign * (26 + Math.random() * 13), spin: 0.25, tag: '強勁滾地' };
   }
   // 一／三壘方向軟弱滾地球（需往前衝處理、二壘手補位一壘）
-  if (r < (isSS ? 0.32 : 0.20)) {
+  if (r < (isSS ? 0.30 : 0.20)) {
     const sign = Math.random() < 0.5 ? -1 : 1;
     return { ev: 18 + Math.random() * 6, la: 1 + Math.random() * 4, spray: sign * (22 + Math.random() * 15), spin: 0.2, tag: '軟弱滾地' };
   }
   // 一般內野滾地球（守游擊時機率拉高）
-  if (r < (isSS ? 0.58 : (isOF ? 0.28 : 0.36))) {
+  if (r < (isSS ? 0.54 : (isOF ? 0.26 : 0.35))) {
     const spray = isSS && Math.random() < 0.6 ? (4 + Math.random() * 24) : (Math.random() * 52 - 26);
     return { ev: 30 + Math.random() * 13, la: 2 + Math.random() * 6, spray, spin: 0.3, tag: '' };
   }
   // 內外野中間三不管地帶飛球
-  if (r < (isSS ? 0.68 : 0.46)) {
+  if (r < (isSS ? 0.64 : 0.44)) {
     let spray = Math.random() * 58 - 29;
     if (isSS && Math.random() < 0.55) spray = 4 + Math.random() * 20;
     return { ev: 26 + Math.random() * 5.5, la: 33 + Math.random() * 11, spray, spin: 0.75, tag: '三不管' };
   }
   // 車布邊安打
-  if (r < (isSS ? 0.72 : 0.51)) {
+  if (r < (isSS ? 0.68 : 0.49)) {
     const sign = Math.random() > 0.5 ? 1 : -1;
     return { ev: 44 + Math.random() * 6, la: 1 + Math.random() * 3, spray: sign * (42.8 + Math.random() * 1.8), spin: 0.15, tag: '車布邊' };
   }
   // 平飛球
-  if (r < (isSS ? 0.80 : 0.62)) {
-    const spray = isSS && Math.random() < 0.45 ? (6 + Math.random() * 20) : (Math.random() * 68 - 34);
+  if (r < (isSS ? 0.76 : 0.59)) {
+    const spray = isSS && Math.random() < 0.45 ? (6 + Math.random() * 20) : (Math.random() * 72 - 36);
     return { ev: 36 + Math.random() * 9, la: 10 + Math.random() * 9, spray, spin: 0.9, tag: '' };
   }
-  // 外野高飛球
-  if (r < 0.94) {
-    let spray = Math.random() * 68 - 34;
+  // 刁鑽找洞飛球（專打中外野兩側空隙 ±10°~18° 或邊線角落 ±33°~41°，逼外野手大幅橫移）
+  if (r < (isSS ? 0.84 : 0.74)) {
+    const sign = Math.random() < 0.5 ? 1 : -1;
+    let spray = sign * (Math.random() < 0.62 ? (10 + Math.random() * 8) : (33 + Math.random() * 8));
     if (isOF && Math.random() < 0.55) {
-      if (game.playerPos === 'CF') spray = Math.random() * 24 - 12;
-      else if (game.playerPos === 'LF') spray = 14 + Math.random() * 22;
-      else if (game.playerPos === 'RF') spray = -(14 + Math.random() * 22);
+      if (game.playerPos === 'CF') spray = sign * (10 + Math.random() * 8);
+      else if (game.playerPos === 'LF') spray = Math.random() < 0.5 ? (10 + Math.random() * 7) : (33 + Math.random() * 8);
+      else if (game.playerPos === 'RF') spray = Math.random() < 0.5 ? -(10 + Math.random() * 7) : -(33 + Math.random() * 8);
     }
-    return { ev: 37.5 + Math.random() * 8.0, la: 25 + Math.random() * 18, spray, spin: 1.05, tag: '' };
+    return { ev: 35 + Math.random() * 7.5, la: 15 + Math.random() * 11, spray, spin: 0.9, tag: '找洞飛球' };
   }
-  // 全壘打級
-  return { ev: 47.5 + Math.random() * 5, la: 25 + Math.random() * 10, spray: Math.random() * 64 - 32, spin: 1.2, tag: '' };
+  // 越過頭頂深遠飛球／牆前長打（平快且深遠，容易飛過頭頂落地或撞牆反彈）
+  if (r < (isSS ? 0.90 : 0.86)) {
+    let spray = Math.random() * 74 - 37;
+    if (isOF && Math.random() < 0.55) {
+      if (game.playerPos === 'CF') spray = Math.random() * 32 - 16;
+      else if (game.playerPos === 'LF') spray = 12 + Math.random() * 25;
+      else if (game.playerPos === 'RF') spray = -(12 + Math.random() * 25);
+    }
+    return { ev: 44 + Math.random() * 4.2, la: 19 + Math.random() * 7.5, spray, spin: 0.95, tag: '越頂長打' };
+  }
+  // 一般外野高飛球（壓低初速上限，不再動不動飛出去）
+  if (r < 0.975) {
+    let spray = Math.random() * 76 - 38;
+    if (isOF && Math.random() < 0.55) {
+      if (game.playerPos === 'CF') spray = Math.random() * 28 - 14;
+      else if (game.playerPos === 'LF') spray = 12 + Math.random() * 26;
+      else if (game.playerPos === 'RF') spray = -(12 + Math.random() * 26);
+    }
+    return { ev: 34.5 + Math.random() * 7.5, la: 28 + Math.random() * 17, spray, spin: 1.05, tag: '' };
+  }
+  // 全壘打級（降至 2.5%）
+  return { ev: 49 + Math.random() * 4.5, la: 26 + Math.random() * 9, spray: Math.random() * 68 - 34, spin: 1.2, tag: '' };
 }
-
 function spawnLiveRunners(isMeBatting) {
   clearLiveRunners();
   const color = isPlayerDefense() ? 0xc62828 : 0x1565c0;
@@ -1588,7 +1608,7 @@ function updateFieldersAndCoverage(dt) {
         if (!f.mesh.visible) return;
         if (pl.tag === '車布邊' && f.type === 'IF') return;
         const t = (!pl.landed && f.type === 'OF') ? state.meta.land : state.ballPos;
-        const maxRange = f.type === 'IF' ? (pl.tag === '軟弱滾地' ? 20 : 15) : 38;
+        const maxRange = f.type === 'IF' ? (pl.tag === '軟弱滾地' ? 20 : 15) : 52;
         if (Math.hypot(t.x - f.home.x, t.z - f.home.z) < maxRange) {
           const d = Math.hypot(t.x - f.pos.x, t.z - f.pos.z);
           if (d < bestDist) { bestDist = d; primaryChaser = f; }
@@ -1612,7 +1632,14 @@ function updateFieldersAndCoverage(dt) {
       moveObjToward(f.pos, BASES[pl.selfCoverBase % 4], f.speed, dt);
     } else if (!pl.fielded && (f === primaryChaser || f === bloopIF || f === bloopOF)) {
       const target = (!pl.landed && (f.type === 'OF' || pl.tag === '三不管')) ? state.meta.land : state.ballPos;
-      moveObjToward(f.pos, target, f.speed, dt);
+      if (!(f.type === 'OF' && !pl.landed && pl.elapsed < 0.42)) {
+        let chaseSpd = f.speed;
+        if (f.type === 'OF' && !pl.landed) {
+          if (target.z > f.pos.z + 2) chaseSpd *= 0.80;
+          else if (Math.abs(target.x - f.pos.x) > 8) chaseSpd *= 0.90;
+        }
+        moveObjToward(f.pos, target, chaseSpd, dt);
+      }
     } else if (f.id === '1B') {
       moveObjToward(f.pos, BASES[1], f.speed, dt);
     } else if (f.id === '3B') {
