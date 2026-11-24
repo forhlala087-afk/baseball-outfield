@@ -1786,7 +1786,8 @@ function updateLivePlay(dt, now) {
       }
     });
   } else if (player.hasBall) {
-    ballMesh.position.set(player.pos.x, player.pos.y - 0.25, player.pos.z - 0.4);
+    ballMesh.position.set(player.pos.x, 0.9, player.pos.z);
+    ballShadow.position.set(player.pos.x, 0.07, player.pos.z);
     if (pl.playerCoverBase && isPlayerDefense() && game.playerPos === 'SS') {
       const bPos = BASES[pl.playerCoverBase % 4];
       if (Math.hypot(player.pos.x - bPos.x, player.pos.z - bPos.z) < 1.35) {
@@ -1988,11 +1989,26 @@ function updateLivePlay(dt, now) {
     }
   });
 
-  if (isPlayerDefense() || !(isPlayerOffense() && (game.playerBase > 0 || pl.isMeBatting))) {
+  if (isPlayerDefense() && (player.hasBall || pl.pendingFromPlayer)) {
+    let aim = new THREE.Vector3(0, 1.4, 22);
+    if (pl.pendingFromPlayer && pl.pendingThrowTargetPos) {
+      aim.copy(pl.pendingThrowTargetPos);
+    } else if (pl.playerCoverBase) {
+      const b = BASES[pl.playerCoverBase % 4];
+      aim.set(b.x, 1.1, b.z);
+    } else if (game.playerPos === 'SS') {
+      const tb = getBestThrowTargetBase(true);
+      const tPos = BASES[tb % 4];
+      if (Math.hypot(player.pos.x - tPos.x, player.pos.z - tPos.z) > 3.5) aim.set(tPos.x, 1.3, tPos.z);
+      else if (Math.hypot(player.pos.x - BASES[1].x, player.pos.z - BASES[1].z) > 3.5) aim.set(BASES[1].x, 1.3, BASES[1].z);
+      else aim.set(0, 1.3, 18.44);
+    }
+    lookTarget.lerp(aim, 0.16);
+    camera.lookAt(lookTarget);
+  } else if (isPlayerDefense() || !(isPlayerOffense() && (game.playerBase > 0 || pl.isMeBatting))) {
     lookTarget.lerp(ballMesh.position, 0.2);
     camera.lookAt(lookTarget);
   }
-
   const totalOutsNow = game.outs + liveRunners.filter(r => r.out).length;
   if (pl.elapsed > 18) {
     finalizeLivePlay(pl.lastGotOut, pl.lastOutBase || 1);
@@ -2391,7 +2407,7 @@ function finalizeLivePlay(gotOut = false, outBase = 1) {
     const prefix = pl.tag === '車布邊' ? '車布邊' : '';
     const hitName = bDest >= 4 ? '場內全壘打！' : (bDest === 3 ? `${prefix}三壘安打！` : (bDest === 2 ? `${prefix}二壘安打！` : `${prefix}一壘安打！`));
     setBanner(hitName, '');
-    setTicker(`安全上壘！記為${hitName}`);
+    setTicker(`安全上壘！${hitName}`);
     nextBatter();
     enterAfterPause(1.4);
   }
