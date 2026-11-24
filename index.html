@@ -1855,6 +1855,25 @@ function updateLivePlay(dt, now) {
       }
     }
 
+    // 玩家在一、二壘遇外野飛球：未按衝刺前先跑出約 1/3，視線鎖定在球上方便判斷
+    if (isAirFly && r.isMe && isPlayerOffense() && !r.isBatter && (r.baseFrom === 1 || r.baseFrom === 2) && state.meta && state.meta.land.z > 42 && !r.manualControl) {
+      if (holdRun) {
+        r.manualControl = true;
+        r.leadGrace = 0;
+      } else {
+        r.leadGrace = 0.45;
+        const movingOut = r.progress < 0.33;
+        if (movingOut) r.progress = Math.min(0.33, r.progress + 0.26 * dt);
+        const cur = new THREE.Vector3().lerpVectors(BASES[r.baseFrom % 4], BASES[r.baseTo % 4], r.progress);
+        cur.y = 1.65 + (movingOut ? Math.sin(now * 0.02) * 0.06 : 0);
+        camera.position.copy(cur);
+        lookTarget.lerp(ballMesh.position, 0.22);
+        camera.lookAt(lookTarget);
+        anyMoving = true;
+        return;
+      }
+    }
+
     // 未滿兩出局的空中飛球／平飛球：夠深遠想 Tag-up 的二三壘跑者留在壘包等接殺，其餘先跑出去約 1/3 判斷
     if (isAirFly && !r.isBatter && !r.isMe) {
       const wantTagUp = r.baseFrom >= 2 && pl.la >= 20 && state.meta && state.meta.land.z >= 82;
@@ -1873,11 +1892,21 @@ function updateLivePlay(dt, now) {
       if (r.baseFrom < 2 || state.ballPos.z < 82 || pl.la < 20) { r.stopped = true; return; }
     }
 
+    // 落地後保留短暫反應時間，讓玩家看到球落地再按衝刺，不會瞬間往回拉
+    if (r.isMe && isPlayerOffense() && r.leadGrace > 0) {
+      if (holdRun || forcedNow || pl.flyCaught) {
+        if (holdRun) r.manualControl = true;
+        r.leadGrace = 0;
+      } else {
+        r.leadGrace = Math.max(0, r.leadGrace - dt);
+      }
+    }
+
     // 球落地安打（或滾穿到外野）時，原本壘包往前推進這一個壘包直接衝、不受 1/2 限制；繞過該壘包想再拚下一壘才看 1/2
     const commitFirstBase = !r.isMe && r.baseFrom === r.startBase && pl.landed && !pl.flyCaught && (pl.la > 8 || state.ballPos.z > 40);
     if (r.baseFrom >= 1 && !r.retreating && !forcedNow && !pushedByTrailer && !commitFirstBase) {
       if (r.isMe && isPlayerOffense()) {
-        if (!holdRun && r.progress > 0.03 && r.progress < 0.5) r.retreating = true;
+        if (!holdRun && !(r.leadGrace > 0) && r.progress > 0.03 && r.progress < 0.5) r.retreating = true;
       } else if (!pl.flyCaught) {
         if ((pl.fielded || pl.throwActive) && r.progress < 0.5) r.retreating = true;
       }
@@ -1927,10 +1956,12 @@ function updateLivePlay(dt, now) {
       const baseLook = BASES[r.baseTo % 4].clone().setY(1.3);
       const runDir = baseLook.clone().sub(cur).normalize();
       const ballDir = ballMesh.position.clone().sub(cur).normalize();
-      const gaze = runDir.dot(ballDir) > -0.25 ? baseLook.clone().lerp(ballMesh.position, 0.55) : baseLook;
+      const gaze = (spd === 0 && r.leadGrace > 0)
+        ? ballMesh.position
+        : (runDir.dot(ballDir) > -0.25 ? baseLook.clone().lerp(ballMesh.position, 0.55) : baseLook);
       lookTarget.lerp(gaze, 0.16);
       camera.lookAt(lookTarget);
-      if (spd > 0) anyMoving = true;
+      if (spd > 0 || r.leadGrace > 0) anyMoving = true;
     } else {
       r.progress += r.speed * speedScale * dt;
       const cur = new THREE.Vector3().lerpVectors(BASES[r.baseFrom % 4], BASES[r.baseTo % 4], Math.min(1, r.progress));
@@ -2014,8 +2045,8 @@ function handleFlyOut(fielderId, isPlayerCF) {
     if (r.isMe && r.progress > 0.08) {
       r.leftEarly = true;
       r.retreating = true;
-      targetBase = r.baseFrom;
-    } else if (!r.isMe && r.progress > 0.02) {
+      if (r.manualControl) targetBase = r.baseFrom;
+    }else if (!r.isMe && r.progress > 0.02) {
       r.retreating = true;
     } else if (r.baseFrom >= 2 && state.ballPos.z >= 82 && pl.la >= 20) {
       targetBase = Math.max(targetBase, r.baseTo);
