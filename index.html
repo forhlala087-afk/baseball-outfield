@@ -2041,14 +2041,41 @@ function handleAIFieldGroundBall(f) {
 
   const isInfield = f.type === 'IF';
   if (isInfield) {
-    let targetBase = (pl.tag !== '軟弱滾地' && game.bases[0] && game.outs < 2) ? 2 : 1;
-    let abandonedDP = false;
+    const batterRunning1B = liveRunners.some(r => r.isBatter && !r.out && !r.scored && r.baseTo === 1 && !r.stopped);
+    const forceAt2B = pl.tag !== '軟弱滾地' && game.outs < 2 && liveRunners.some(r => !r.out && !r.scored && r.isForced && r.baseTo === 2);
+    let targetBase = 0;
+    let isDPAttempt = false;
+
+    if (forceAt2B && batterRunning1B) {
+      targetBase = 2;
+      isDPAttempt = true;
+    } else if (batterRunning1B) {
+      targetBase = 1;
+    } else {
+      // 打者已經踩過一壘（例如沖天炮落地），改抓還在往前衝的領先跑者
+      let leadAdv = 0;
+      liveRunners.forEach(r => {
+        if (!r.out && !r.scored && !r.stopped && !r.retreating && (r.isForced || r.progress > 0.12) && r.baseTo > leadAdv) {
+          leadAdv = r.baseTo;
+        }
+      });
+      targetBase = leadAdv;
+    }
+
+    if (targetBase === 0) {
+      pl.throwDelay = 0;
+      pl.waitingEnd = true;
+      pl.endCooldown = 1.5;
+      setTicker(`${f.id} 持球牽制`);
+      return;
+    }
+
     // 一壘或二壘方向滾地球要抓雙殺時，由游擊手進二壘補位；三壘方向則由二壘手補位
-    if (targetBase === 2 && (f.id === '1B' || f.id === '2B') && isPlayerDefense() && game.playerPos === 'SS') {
+    if (isDPAttempt && targetBase === 2 && (f.id === '1B' || f.id === '2B') && isPlayerDefense() && game.playerPos === 'SS') {
       const ssDist2B = Math.hypot(player.pos.x - BASES[2].x, player.pos.z - BASES[2].z);
       if (ssDist2B > 7.5) {
         targetBase = 1;
-        abandonedDP = true;
+        isDPAttempt = false;
       }
     }
     if (f.id === '1B' && targetBase === 1 && pl.tag !== '軟弱滾地') {
@@ -2059,12 +2086,13 @@ function handleAIFieldGroundBall(f) {
       const cover = getBaseCoverFielder(targetBase, f.id);
       if (!cover) {
         pl.throwDelay = 0;
+        pl.waitingEnd = true;
+        pl.endCooldown = 1.5;
         setTicker(`${f.id} 持球牽制`);
-        finalizeLivePlay(false, targetBase);
         return;
       }
       pl.throwDelay = 0.38;
-      if (targetBase === 2) pl.dpSecondThrow = true;
+      if (isDPAttempt && targetBase === 2) pl.dpSecondThrow = true;
       pl.relayActive = false;
       pl.throwTargetFielder = cover;
       pl.pendingThrowTargetPos = cover.pos.clone().setY(1.35);
