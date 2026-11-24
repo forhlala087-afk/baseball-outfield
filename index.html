@@ -185,8 +185,8 @@
     background: rgba(255,255,255,0.45); border: 2px solid #fff;
   }
   #def-pad {
-    position: absolute; right: 14px; bottom: max(22px, env(safe-area-inset-bottom) + 12px);
-    width: 148px; height: 148px; pointer-events: none;
+    position: absolute; right: 12px; bottom: max(18px, env(safe-area-inset-bottom) + 10px);
+    width: 164px; height: 164px; pointer-events: none;
   }
   #dive-btn {
     position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
@@ -211,10 +211,10 @@
     opacity: 1; background: rgba(229, 57, 53, 0.92); border-color: #ffcdd2;
     box-shadow: 0 0 10px rgba(229, 57, 53, 0.7);
   }
-  #btn-th-3 { top: 0; left: 0; }
-  #btn-th-2 { top: 0; right: 0; }
-  #btn-th-4 { bottom: 0; left: 0; }
-  #btn-th-1 { bottom: 0; right: 0; }
+  #btn-th-2 { top: 0; left: 60px; }
+  #btn-th-1 { top: 60px; right: 0; }
+  #btn-th-4 { bottom: 0; left: 60px; }
+  #btn-th-3 { top: 60px; left: 0; }
 
   #start-btn-wrap { position: fixed; bottom: 20%; left: 50%; transform: translateX(-50%); z-index: 16; }
   #minimap {
@@ -2200,7 +2200,7 @@ function resolveThrowArrival() {
 
   if (pl.dpSecondThrow && tb === 2 && gotOut) {
     pl.dpSecondThrow = false;
-    const cover2B = getFielderById(pl.fielderId === 'SS' ? '2B' : 'SS');
+    const cover2B = (cover && !cover.isPlayer) ? cover : getFielderById((pl.fielderId === 'SS' || pl.fielderId === '3B') ? '2B' : 'SS');
     const cover1B = getBaseCoverFielder(1, cover2B.id);
     if (cover1B) {
       pl.fielderRef = cover2B;
