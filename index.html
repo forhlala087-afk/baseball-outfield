@@ -296,7 +296,7 @@
         <option value="1B" disabled>一壘手 (開發中)</option>
         <option value="2B" disabled>二壘手 (開發中)</option>
         <option value="3B" disabled>三壘手 (開發中)</option>
-        <option value="DH" disabled>指定打擊 (開發中)</option>
+        <option value="DH">指定打擊 (DH)</option>
         <option value="P" disabled>投手 (開發中)</option>
       </select>
     </div>
@@ -634,6 +634,7 @@ function isPlayerDefense() {
   return (game.playerSide === 'home' && game.half === 'top') || (game.playerSide === 'away' && game.half === 'bottom');
 }
 function isPlayerOffense() { return !isPlayerDefense(); }
+function isPlayerFielding() { return isPlayerDefense() && game.playerPos !== 'DH'; }
 
 function syncStaticRunners() {
   const color = isPlayerDefense() ? 0xc62828 : 0x1565c0;
@@ -717,7 +718,8 @@ const POS_MAP = {
   CF: { name: '中外野手', pos: new THREE.Vector3(0, 1.7, 92), isIF: false },
   LF: { name: '左外野手', pos: new THREE.Vector3(37, 1.7, 82), isIF: false },
   RF: { name: '右外野手', pos: new THREE.Vector3(-37, 1.7, 82), isIF: false },
-  SS: { name: '游擊手', pos: new THREE.Vector3(8.5, 1.7, 33.5), isIF: true }
+  SS: { name: '游擊手', pos: new THREE.Vector3(8.5, 1.7, 33.5), isIF: true },
+  DH: { name: '指定打擊', pos: DUGOUT_POS.clone(), isIF: false }
 };
 const START_POS = POS_MAP.CF.pos.clone();
 function getPlayerStartPos() {
@@ -798,7 +800,7 @@ window.addEventListener('keydown', e => {
     if (state.mode === 'game') {
       if (!game.active) startGameMode();
       else if (game.subPhase === 'BAT_PITCH') swingBat();
-      else if (game.subPhase === 'LIVE_PLAY' && isPlayerDefense()) handleDefenseAction();
+      else if (game.subPhase === 'LIVE_PLAY' && isPlayerFielding()) handleDefenseAction();
       else if (game.subPhase === 'LIVE_PLAY' && isPlayerOffense() && (game.playerBase > 0 || (game.play && game.play.isMeBatting))) holdRun = true;
       else if (game.subPhase === 'BASE_TAGUP') holdRun = true;
     } else {
@@ -885,7 +887,7 @@ function getOppOrder() { return game.playerSide === 'home' ? game.awayOrder : ga
 
 function updateDiveBtnState() {
   diveBtn.className = '';
-  const showBaseBtns = state.mode === 'game' && isPlayerDefense();
+  const showBaseBtns = state.mode === 'game' && isPlayerFielding();
   document.querySelectorAll('.base-throw-btn').forEach(b => {
     b.style.display = showBaseBtns ? 'flex' : 'none';
     b.classList.toggle('ready', showBaseBtns && player.hasBall && game.subPhase === 'LIVE_PLAY');
@@ -936,14 +938,17 @@ function updateGameUI() {
   const badge = document.getElementById('role-badge');
   badge.className = 'role-badge';
   const prevOrder = game.playerOrder === 1 ? 9 : game.playerOrder - 1;
-  if (isPlayerDefense()) badge.textContent = `${POS_MAP[game.playerPos].name}守備`;
+  if (isPlayerFielding()) badge.textContent = `${POS_MAP[game.playerPos].name}守備`;
+  else if (isPlayerDefense()) { badge.textContent = '休息室觀戰（DH）'; badge.classList.add('dug'); }
   else if (game.playerBase > 0) { badge.textContent = `${['', '一', '二', '三'][game.playerBase]}壘跑者`; badge.classList.add('run'); }
   else if (getMyOrder() === game.playerOrder) { badge.textContent = `打擊區（${game.playerOrder}棒）`; badge.classList.add('bat'); }
   else if (getMyOrder() === prevOrder) { badge.textContent = '打擊準備區'; badge.classList.add('bat'); }
   else { badge.textContent = '休息室觀戰'; badge.classList.add('dug'); }
 
   const s = game.stats;
-  document.getElementById('my-stats').textContent = `${s.ab}-${s.h} | ${s.hr}HR | ${s.po}接殺`;
+  document.getElementById('my-stats').textContent = game.playerPos === 'DH'
+    ? `${s.ab}-${s.h} | ${s.hr}HR | ${s.rbi}打點`
+    : `${s.ab}-${s.h} | ${s.hr}HR | ${s.po}接殺`;
   syncStaticRunners();
 }
 
@@ -1183,11 +1188,11 @@ function addOuts(count, msg) {
     if (game.half === 'top') {
       game.half = 'bottom';
       if (game.inning === 9 && game.homeScore > game.awayScore) { endFullGame(); return true; }
-      setBanner(`${game.inning}局下半`, isPlayerDefense() ? `三出局攻守交換｜前往${POS_MAP[game.playerPos].name}守備！` : '三出局攻守交換｜換我方進攻！');
+      setBanner(`${game.inning}局下半`, isPlayerFielding() ? `三出局攻守交換｜前往${POS_MAP[game.playerPos].name}守備！` : (isPlayerDefense() ? '三出局攻守交換｜回休息室觀戰！' : '三出局攻守交換｜換我方進攻！'));
     } else {
       game.half = 'top';
       game.inning++;
-      setBanner(`${game.inning}局上半`, isPlayerDefense() ? `三出局攻守交換｜前往${POS_MAP[game.playerPos].name}守備！` : '三出局攻守交換｜換我方進攻！');
+      setBanner(`${game.inning}局上半`, isPlayerFielding() ? `三出局攻守交換｜前往${POS_MAP[game.playerPos].name}守備！` : (isPlayerDefense() ? '三出局攻守交換｜回休息室觀戰！' : '三出局攻守交換｜換我方進攻！'));
     }
     game.subPhase = 'CHANGE_SIDES';
     game.timer = 2.2;
@@ -1262,7 +1267,15 @@ function enterCurrentRole() {
   setBanner('', '');
   updateDiveBtnState();
 
-  if (isPlayerDefense()) {
+  if (isPlayerDefense() && game.playerPos === 'DH') {
+    resetFielders(false, 0x1565c0);
+    camera.position.copy(DUGOUT_POS);
+    lookTarget.set(0, 1.4, 15);
+    camera.lookAt(lookTarget);
+    game.subPhase = 'OFF_SIM_WAIT';
+    game.timer = 1.35 / state.speed;
+    setTicker(`對手 ${getOppOrder()} 棒打擊中｜你在休息室觀戰（DH）`);
+  } else if (isPlayerDefense()) {
     resetFielders(true, 0x1565c0);
     resetPlayerCF();
     touchControls.style.display = 'block';
@@ -1334,7 +1347,7 @@ function launchSimPitch(isDefense) {
 function generateBattedBallParams() {
   const r = Math.random();
   const isSS = isPlayerDefense() && game.playerPos === 'SS';
-  const isOF = isPlayerDefense() && !POS_MAP[game.playerPos].isIF;
+  const isOF = isPlayerFielding() && !POS_MAP[game.playerPos].isIF;
 
   // 內野高飛球（界內高飛 or 界外高飛）
   if (r < (isSS ? 0.11 : 0.05)) {
@@ -1439,7 +1452,7 @@ function startLiveBallInPlay(ev, la, spray, spin, isMeBatting = false, tag = '')
   state.meta = { ev, la, spray, spin, ...sim };
   AudioFX.crack(THREE.MathUtils.clamp((ev - 30) / 16, 0.65, 1.3));
 
-  if (isPlayerDefense() && state.showMarker && la > 12) {
+  if (isPlayerFielding() && state.showMarker && la > 12) {
     landingRing.position.set(sim.land.x, 0.08, sim.land.z);
     landingRing.visible = true;
   }
@@ -1470,7 +1483,7 @@ function startLiveBallInPlay(ev, la, spray, spin, isMeBatting = false, tag = '')
   game.subPhase = 'LIVE_PLAY';
   if (tag === '車布邊') {
     setTicker('⚡ 車布邊強襲球！貼著邊線滾過去！');
-  } else if (isPlayerDefense() && Math.abs(spray) < 16 && Math.hypot(sim.land.x, sim.land.z) > 55) {
+  } else if (isPlayerFielding() && game.playerPos === 'CF' && Math.abs(spray) < 16 && Math.hypot(sim.land.x, sim.land.z) > 55) {
     setTicker('⚡ 打向中外野！快追球！');
   } else {
     setTicker(la < 11 ? '滾地球打進場內！' : '高飛球打向空中！');
@@ -1670,7 +1683,7 @@ function updateLivePlay(dt, now) {
   if (!pl) return;
   pl.elapsed += dt;
 
-  if (isPlayerDefense()) updateCFMovement(dt, now);
+  if (isPlayerFielding()) updateCFMovement(dt, now);
 
   if (pl.isHR) {
     stepPhysics(state.ballPos, state.ballVel, state.meta.spin, dt);
@@ -1763,7 +1776,7 @@ function updateLivePlay(dt, now) {
     ballShadow.position.set(state.ballPos.x, 0.07, state.ballPos.z);
     ballMesh.scale.setScalar(THREE.MathUtils.clamp(camera.position.distanceTo(state.ballPos) * 0.026, 1.0, 2.8));
 
-    if (isPlayerDefense()) {
+    if (isPlayerFielding()) {
       const horiz = Math.hypot(state.ballPos.x - player.pos.x, state.ballPos.z - player.pos.z);
       const canCatch = (game.playerPos === 'SS') ? true : (state.ballVel.y < 0);
       if (!pl.landed && horiz <= (player.diving ? 2.85 : 2.15) && state.ballPos.y <= 2.65 && state.ballPos.y >= 0.15 && canCatch) {
@@ -2725,7 +2738,7 @@ function drawMinimap() {
     mctx.beginPath(); mctx.arc(ox - p.x * scale, oy - p.z * scale, 4, 0, Math.PI * 2); mctx.fill();
   });
 
-  if (state.mode !== 'game' || isPlayerDefense()) {
+  if (state.mode !== 'game' || isPlayerFielding()) {
     mctx.fillStyle = '#29b6f6';
     mctx.beginPath(); mctx.arc(ox - player.pos.x * scale, oy - player.pos.z * scale, 5, 0, Math.PI * 2); mctx.fill();
   }
