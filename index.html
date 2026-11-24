@@ -849,12 +849,15 @@ function updateDiveBtnState() {
     return;
   }
   if (player.hasBall) {
-    const isRelay = game.playerPos !== 'SS' && player.pos.z > 88;
     const tb = getBestThrowTargetBase(true);
+    const prog = getRunnerProgressTo(tb);
+    const canDirect = game.playerPos === 'SS' || (player.pos.z <= 88 && prog >= 0.25 && prog <= 0.75);
     const bName = ['本壘', '一壘', '二壘', '三壘', '本壘'][tb];
-    diveBtn.textContent = isRelay ? `轉傳\n${bName}` : `直傳\n${bName}`;
+    if (canDirect) diveBtn.textContent = `直傳\n${bName}`;
+    else if (prog >= 0 && prog < 0.25) diveBtn.textContent = `轉傳\n${bName}`;
+    else diveBtn.textContent = '回傳\nCutoff';
     diveBtn.classList.add('throw');
-  } else if (game.play.landed && !game.play.fielded) {
+  }else if (game.play.landed && !game.play.fielded) {
     diveBtn.textContent = '撿球';
     diveBtn.classList.add('pickup');
   } else {
@@ -1021,8 +1024,18 @@ function getCutoffFielder(fromPos) {
   }
   return best || getFielderById('2B');
 }
+function getRunnerProgressTo(tb) {
+  let maxP = -1;
+  liveRunners.forEach(r => {
+    if (!r.out && !r.scored && !r.stopped && !r.retreating && r.baseTo === tb && r.progress > 0.02) {
+      if (r.progress > maxP) maxP = r.progress;
+    }
+  });
+  return maxP;
+}
 function hasRunnerMovingTo(tb) {
-  return liveRunners.some(r => !r.out && !r.scored && !r.stopped && !r.retreating && r.baseTo === tb && r.progress > 0.05);
+  const p = getRunnerProgressTo(tb);
+  return p >= 0 && p <= 0.75;
 }
 function getBaseCoverFielder(tb, excludeId = '') {
   if (tb === 4) return { id: 'C', pos: catcherMesh.position, isCatcher: true };
@@ -1053,8 +1066,10 @@ function throwBallFromCF() {
   const pl = game.play;
   const targetBase = getBestThrowTargetBase(true);
   const bName = ['本壘', '一壘', '二壘', '三壘', '本壘'][targetBase];
-  const runnerAdvancing = hasRunnerMovingTo(targetBase);
-  const isRelay = game.playerPos !== 'SS' && (!runnerAdvancing || player.pos.z > 88);
+  const prog = getRunnerProgressTo(targetBase);
+  const canDirectThrow = prog >= 0.25 && prog <= 0.75 && player.pos.z <= 88;
+  const wantRelayOut = prog >= 0 && prog <= 0.75;
+  const isRelay = game.playerPos !== 'SS' && !canDirectThrow;
 
   pl.throwDelay = 0.22;
   pl.fielderRef = null;
@@ -1067,7 +1082,10 @@ function throwBallFromCF() {
     pl.relayFinalBase = targetBase;
     pl.pendingThrowTargetPos = cutoff.pos.clone().setY(1.4);
     pl.pendingThrowTargetBase = -1;
-    setBanner(runnerAdvancing ? `傳給 ${cutoff.id} 轉傳${bName}！` : `回傳給最近的 ${cutoff.id}！`, '');
+    const msg = wantRelayOut
+      ? `傳給 ${cutoff.id} 轉傳${bName}！`
+      : (prog > 0.75 ? `跑者已逼近${bName}，改回傳給最近的 ${cutoff.id}！` : `回傳給最近的 ${cutoff.id}！`);
+    setBanner(msg, '');
   } else {
     const cover = getBaseCoverFielder(targetBase, 'PLAYER');
     if (!cover) {
@@ -1997,16 +2015,23 @@ function handleAIFieldGroundBall(f) {
     pl.throwDelay = 0.44;
     const targetBase = getBestThrowTargetBase(false);
     const bName = ['本', '一', '二', '三', '本'][targetBase];
-    const runnerAdvancing = hasRunnerMovingTo(targetBase);
-    const cover = runnerAdvancing ? getBaseCoverFielder(targetBase, f.id) : null;
-    if (!runnerAdvancing || !cover || f.pos.z > 84) {
+    const prog = getRunnerProgressTo(targetBase);
+    const canDirectThrow = prog >= 0.25 && prog <= 0.75 && f.pos.z <= 84;
+    const wantRelayOut = prog >= 0 && prog <= 0.75;
+    const cover = canDirectThrow ? getBaseCoverFielder(targetBase, f.id) : null;
+    if (!canDirectThrow || !cover) {
       const cutoff = getCutoffFielder(f.pos);
       pl.relayActive = true;
       pl.cutoffFielder = cutoff;
       pl.relayFinalBase = targetBase;
       pl.pendingThrowTargetPos = cutoff.pos.clone().setY(1.4);
       pl.pendingThrowTargetBase = -1;
-      setTicker(runnerAdvancing ? `${f.id} 撿到球，傳給 ${cutoff.id} 準備轉傳${bName}壘！` : `${f.id} 撿到球，穩穩回傳給最近的 ${cutoff.id}！`);
+      const msg = wantRelayOut
+        ? `${f.id} 撿到球，傳給 ${cutoff.id} 準備轉傳${bName}壘！`
+        : (prog > 0.75
+          ? `${f.id} 見跑者已逼近${bName}壘，穩穩回傳給最近的 ${cutoff.id}！`
+          : `${f.id} 撿到球，穩穩回傳給最近的 ${cutoff.id}！`);
+      setTicker(msg);
     } else {
       pl.relayActive = false;
       pl.throwTargetFielder = cover;
