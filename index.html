@@ -1660,11 +1660,12 @@ function updateFieldersAndCoverage(dt) {
   const firstBaseOffBag = isPlayer1B
     ? ((pl.tag === '軟弱滾地' && pl.spray < 0) || (pl.fielderId === '1B' && player1BDistBag > 4.5) || (!pl.fielded && ballTo1BSide && player1BDistBag > 8.5))
     : ((primaryChaser === f1B || pl.fielderId === '1B') || Math.hypot(f1B.pos.x - BASES[1].x, f1B.pos.z - BASES[1].z) > 4.5);
-  if (firstBaseOffBag) {
+  if (pl.selfCoverBase && pl.fielderRef && pl.fielderRef.id === 'P') {
+    moveObjToward(pitcherMesh.position, BASES[pl.selfCoverBase % 4], 7.4, dt);
+  } else if (firstBaseOffBag) {
     const pTarget = pl.tag === '軟弱滾地' ? new THREE.Vector3(-23, 0, 23) : BASES[1];
     moveObjToward(pitcherMesh.position, pTarget, 7.4, dt);
   }
-
   fielders.forEach(f => {
     if (!f.mesh.visible) return;
     if (f === pl.fielderRef && pl.throwDelay > 0) return;
