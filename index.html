@@ -257,6 +257,7 @@
   #run-ret-1 { top: 24px; right: 24px; }
   #run-ret-2 { top: 24px; left: 24px; }
   #run-ret-3 { bottom: 24px; left: 24px; }
+  .run-ret-btn.locked { opacity: 0.25; pointer-events: none; }
   .run-ret-btn.alert {
     background: #e53935; border-color: #ffeb3b;
     box-shadow: 0 0 14px #ffeb3b;
@@ -1013,7 +1014,7 @@ function getMyLiveRunner() {
 }
 
 function setRunnerTargetBase(tb) {
-  if (state.mode !== 'game' || game.subPhase !== 'LIVE_PLAY' || !isPlayerOffense() || !game.play) return;
+  if (state.mode !== 'game' || game.subPhase !== 'LIVE_PLAY' || !isPlayerOffense() || !game.play || game.play.isHR) return;
   const r = getMyLiveRunner();
   if (!r || r.leftEarly) return;
   r.manualControl = true;
@@ -1041,7 +1042,7 @@ function triggerRunnerRetreat(retBase) {
     }
     return;
   }
-  if (state.mode !== 'game' || game.subPhase !== 'LIVE_PLAY' || !isPlayerOffense() || !game.play) return;
+  if (state.mode !== 'game' || game.subPhase !== 'LIVE_PLAY' || !isPlayerOffense() || !game.play || game.play.isHR) return;
   const r = getMyLiveRunner();
   if (!r) return;
   r.manualControl = true;
@@ -1065,6 +1066,8 @@ function updateRunPadUI() {
   if (!showPrePitch && !meR) return;
 
   runCenterBtn.className = '';
+  const isHR = !!(game.play && game.play.isHR);
+  document.querySelectorAll('.run-ret-btn').forEach(b => b.classList.toggle('locked', isHR));
   if (showPrePitch) {
     const canSteal = game.playerBase < 3 && !game.bases[game.playerBase];
     runCenterBtn.textContent = '⚡盜壘';
@@ -1074,7 +1077,7 @@ function updateRunPadUI() {
     runCenterBtn.textContent = '💨衝刺';
     runCenterBtn.classList.add('sprint');
     document.querySelectorAll('.run-base-btn').forEach(b => {
-      b.classList.toggle('target', parseInt(b.dataset.rbase, 10) === meR.targetBase);
+      b.classList.toggle('target', !isHR && parseInt(b.dataset.rbase, 10) === meR.targetBase);
     });
   }
 }
@@ -2199,6 +2202,7 @@ function updateLivePlay(dt, now) {
       pl.hrTimer = 1.5;
       landingRing.visible = false;
       updateDiveBtnState();
+      updateRunPadUI();
       btnRun.textContent = '🏃 按住衝刺（放開慢跑繞壘）';
       liveRunners.forEach(r => {
         if (!r.out && !r.scored) {
