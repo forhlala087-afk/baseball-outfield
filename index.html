@@ -293,7 +293,7 @@
         <option value="LF">左外野手 (LF)</option>
         <option value="RF">右外野手 (RF)</option>
         <option value="SS">游擊手 (SS)</option>
-        <option value="1B" disabled>一壘手 (開發中)</option>
+        <option value="1B">一壘手 (1B)</option>
         <option value="2B" disabled>二壘手 (開發中)</option>
         <option value="3B" disabled>三壘手 (開發中)</option>
         <option value="DH">指定打擊 (DH)</option>
@@ -635,6 +635,7 @@ function isPlayerDefense() {
 }
 function isPlayerOffense() { return !isPlayerDefense(); }
 function isPlayerFielding() { return isPlayerDefense() && game.playerPos !== 'DH'; }
+function isPlayerIF() { return isPlayerFielding() && POS_MAP[game.playerPos] && POS_MAP[game.playerPos].isIF; }
 
 function syncStaticRunners() {
   const color = isPlayerDefense() ? 0xc62828 : 0x1565c0;
@@ -719,6 +720,7 @@ const POS_MAP = {
   LF: { name: '左外野手', pos: new THREE.Vector3(37, 1.7, 82), isIF: false },
   RF: { name: '右外野手', pos: new THREE.Vector3(-37, 1.7, 82), isIF: false },
   SS: { name: '游擊手', pos: new THREE.Vector3(8.5, 1.7, 33.5), isIF: true },
+  '1B': { name: '一壘手', pos: new THREE.Vector3(-14.8, 1.7, 25.5), isIF: true },
   DH: { name: '指定打擊', pos: DUGOUT_POS.clone(), isIF: false }
 };
 const START_POS = POS_MAP.CF.pos.clone();
@@ -897,7 +899,7 @@ function updateDiveBtnState() {
     return;
   }
   if (player.hasBall) {
-    if (game.playerPos === 'SS') {
+    if (POS_MAP[game.playerPos].isIF) {
       diveBtn.textContent = '選壘\n傳球';
       diveBtn.classList.add('pickup');
     } else {
@@ -1027,8 +1029,8 @@ function triggerDive() {
 function handleDefenseAction() {
   if (!game.play) return;
   if (player.hasBall) {
-    if (game.playerPos === 'SS') {
-      setBanner('請選擇傳球壘包！', '按四角的 一 / 二 / 三 / 本（或鍵盤 1~4）');
+    if (POS_MAP[game.playerPos].isIF) {
+      setBanner('請選擇傳球壘包！', '按 一 / 二 / 三 / 本（或鍵盤 1~4）');
     } else {
       throwBallFromCF(0, true);
     }
@@ -1043,16 +1045,19 @@ function handleDefenseAction() {
 function pickUpBallCF() {
   if (!game.play || game.play.fielded) return;
   game.play.fielded = true;
+  game.play.fielderId = game.playerPos;
   player.hasBall = true;
   AudioFX.glovePop();
-  setBanner('撿到球了！', game.playerPos === 'SS'
-    ? '按 一 / 二 / 三 / 本（或數字鍵 1~4）傳球！'
-    : '按 一 / 二 / 三 / 本 直傳，或中間「轉傳」！');
+  setBanner('撿到球了！', game.playerPos === '1B'
+    ? '可自踩一壘，或按 一 / 二 / 三 / 本 傳球！'
+    : (POS_MAP[game.playerPos].isIF
+      ? '按 一 / 二 / 三 / 本（或數字鍵 1~4）傳球！'
+      : '按 一 / 二 / 三 / 本 直傳，或中間「轉傳」！'));
   updateDiveBtnState();
 }
 
 function getBestThrowTargetBase(forPlayerSS = false) {
-  if (forPlayerSS && isPlayerDefense() && game.playerPos === 'SS' && !(game.play && game.play.isRelayThrow)) {
+  if (forPlayerSS && isPlayerIF() && !(game.play && game.play.isRelayThrow)) {
     if (game.bases[0] && game.outs < 2 && !game.play.dpCoverDone) return 2;
     return 1;
   }
@@ -1071,10 +1076,10 @@ function getCutoffFielder(fromPos) {
     const d = Math.hypot(f.pos.x - fromPos.x, f.pos.z - fromPos.z);
     if (d < bestDist) { bestDist = d; best = f; }
   });
-  if (isPlayerDefense() && game.playerPos === 'SS') {
+  if (isPlayerIF()) {
     const pd = Math.hypot(player.pos.x - fromPos.x, player.pos.z - fromPos.z);
     if (pd < bestDist) {
-      return { id: 'SS(你)', pos: player.pos, isPlayer: true };
+      return { id: `${game.playerPos}(你)`, pos: player.pos, isPlayer: true };
     }
   }
   return best || getFielderById('2B');
@@ -1105,11 +1110,11 @@ function getBaseCoverFielder(tb, excludeId = '') {
     const pd = Math.hypot(pitcherMesh.position.x - basePos.x, pitcherMesh.position.z - basePos.z);
     if (pd < bestDist) { bestDist = pd; best = { id: 'P', pos: pitcherMesh.position, mesh: pitcherMesh }; }
   }
-  if (isPlayerDefense() && game.playerPos === 'SS' && excludeId !== 'PLAYER') {
+  if (isPlayerIF() && excludeId !== 'PLAYER') {
     const myD = Math.hypot(player.pos.x - basePos.x, player.pos.z - basePos.z);
     if (myD < bestDist) {
       bestDist = myD;
-      best = { id: 'SS(你)', pos: player.pos, isPlayer: true };
+      best = { id: `${game.playerPos}(你)`, pos: player.pos, isPlayer: true };
     }
   }
   return best;
@@ -1143,9 +1148,9 @@ function throwBallFromCF(manualBase = 0, forceCutoff = false) {
     pl.throwTargetFielder = cover;
     pl.pendingThrowTargetPos = cover ? cover.pos.clone().setY(1.35) : BASES[targetBase % 4].clone().setY(1.2);
     pl.pendingThrowTargetBase = targetBase;
-    if (game.playerPos === 'SS' && targetBase === 2 && game.bases[0] && game.outs < 2 && !pl.dpCoverDone && !pl.flyCaught) {
+    if (POS_MAP[game.playerPos].isIF && targetBase === 2 && game.bases[0] && game.outs < 2 && !pl.dpCoverDone && !pl.flyCaught) {
       pl.dpSecondThrow = true;
-      pl.fielderId = 'SS';
+      pl.fielderId = game.playerPos;
     }
     setBanner(`傳${bName}！`, '');
   }
@@ -1347,48 +1352,56 @@ function launchSimPitch(isDefense) {
 
 function generateBattedBallParams() {
   const r = Math.random();
-  const isSS = isPlayerDefense() && game.playerPos === 'SS';
+  const isIF = isPlayerIF();
+  const isSS = isIF && game.playerPos === 'SS';
+  const is1B = isIF && game.playerPos === '1B';
   const isOF = isPlayerFielding() && !POS_MAP[game.playerPos].isIF;
 
   // 內野高飛球（界內高飛 or 界外高飛）
-  if (r < (isSS ? 0.11 : 0.05)) {
+  if (r < (isIF ? 0.11 : 0.05)) {
     const isFoulPop = Math.random() < 0.38;
-    const spray = isFoulPop ? (Math.random() > 0.5 ? 52 + Math.random() * 14 : -(52 + Math.random() * 14)) : (Math.random() * 44 - 22);
+    const foulSign = is1B && Math.random() < 0.65 ? -1 : (Math.random() > 0.5 ? 1 : -1);
+    const spray = isFoulPop ? foulSign * (52 + Math.random() * 14) : (Math.random() * 44 - 22);
     return { ev: 20 + Math.random() * 6, la: 62 + Math.random() * 14, spray, spin: 0.4, tag: isFoulPop ? '內野界外高飛' : '內野高飛' };
   }
   // 一／三壘方向強勁滾地球（可抓雙殺）
-  if (r < (isSS ? 0.22 : 0.14)) {
-    const sign = Math.random() < 0.5 ? -1 : 1; // -1 一壘方向, +1 三壘方向
+  if (r < (isIF ? 0.23 : 0.14)) {
+    const sign = is1B ? (Math.random() < 0.6 ? -1 : 1) : (Math.random() < 0.5 ? -1 : 1);
     return { ev: 38 + Math.random() * 7, la: 2 + Math.random() * 4, spray: sign * (26 + Math.random() * 13), spin: 0.25, tag: '強勁滾地' };
   }
   // 一／三壘方向軟弱滾地球（需往前衝處理、二壘手補位一壘）
-  if (r < (isSS ? 0.30 : 0.20)) {
-    const sign = Math.random() < 0.5 ? -1 : 1;
+  if (r < (isIF ? 0.31 : 0.20)) {
+    const sign = is1B ? (Math.random() < 0.65 ? -1 : 1) : (Math.random() < 0.5 ? -1 : 1);
     return { ev: 18 + Math.random() * 6, la: 1 + Math.random() * 4, spray: sign * (22 + Math.random() * 15), spin: 0.2, tag: '軟弱滾地' };
   }
-  // 一般內野滾地球（守游擊時機率拉高）
-  if (r < (isSS ? 0.54 : (isOF ? 0.26 : 0.35))) {
-    const spray = isSS && Math.random() < 0.6 ? (4 + Math.random() * 24) : (Math.random() * 52 - 26);
+  // 一般內野滾地球（守內野時機率拉高）
+  if (r < (isIF ? 0.55 : (isOF ? 0.26 : 0.35))) {
+    const spray = isSS && Math.random() < 0.6
+      ? (4 + Math.random() * 24)
+      : (Math.random() * 56 - 28);
     return { ev: 30 + Math.random() * 13, la: 2 + Math.random() * 6, spray, spin: 0.3, tag: '' };
   }
   // 內外野中間三不管地帶飛球
-  if (r < (isSS ? 0.64 : 0.44)) {
+  if (r < (isIF ? 0.64 : 0.44)) {
     let spray = Math.random() * 58 - 29;
     if (isSS && Math.random() < 0.55) spray = 4 + Math.random() * 20;
+    else if (is1B && Math.random() < 0.45) spray = -(8 + Math.random() * 22);
     return { ev: 26 + Math.random() * 5.5, la: 33 + Math.random() * 11, spray, spin: 0.75, tag: '三不管' };
   }
   // 車布邊安打
-  if (r < (isSS ? 0.68 : 0.49)) {
+  if (r < (isIF ? 0.68 : 0.49)) {
     const sign = Math.random() > 0.5 ? 1 : -1;
     return { ev: 44 + Math.random() * 6, la: 1 + Math.random() * 3, spray: sign * (42.8 + Math.random() * 1.8), spin: 0.15, tag: '車布邊' };
   }
   // 平飛球
-  if (r < (isSS ? 0.76 : 0.59)) {
-    const spray = isSS && Math.random() < 0.45 ? (6 + Math.random() * 20) : (Math.random() * 72 - 36);
+  if (r < (isIF ? 0.76 : 0.59)) {
+    let spray = Math.random() * 72 - 36;
+    if (isSS && Math.random() < 0.45) spray = 6 + Math.random() * 20;
+    else if (is1B && Math.random() < 0.4) spray = -(14 + Math.random() * 22);
     return { ev: 36 + Math.random() * 9, la: 10 + Math.random() * 9, spray, spin: 0.9, tag: '' };
   }
   // 刁鑽找洞飛球（拉高一點仰角，變成五五波拚行進間接殺）
-  if (r < (isSS ? 0.82 : 0.68)) {
+  if (r < (isIF ? 0.82 : 0.68)) {
     const sign = Math.random() < 0.5 ? 1 : -1;
     let spray = sign * (Math.random() < 0.65 ? (10 + Math.random() * 7) : (32 + Math.random() * 7));
     if (isOF && Math.random() < 0.55) {
@@ -1399,7 +1412,7 @@ function generateBattedBallParams() {
     return { ev: 35 + Math.random() * 6.5, la: 18 + Math.random() * 11, spray, spin: 0.95, tag: '找洞飛球' };
   }
   // 越過頭頂深遠飛球／警戒區長打（偶爾警戒區接殺、偶爾越頂撞牆）
-  if (r < (isSS ? 0.87 : 0.75)) {
+  if (r < (isIF ? 0.87 : 0.75)) {
     let spray = Math.random() * 72 - 36;
     if (isOF && Math.random() < 0.55) {
       if (game.playerPos === 'CF') spray = Math.random() * 30 - 15;
@@ -1641,7 +1654,12 @@ function updateFieldersAndCoverage(dt) {
   }
 
   const f1B = getFielderById('1B');
-  const firstBaseOffBag = (primaryChaser === f1B || pl.fielderId === '1B') || Math.hypot(f1B.pos.x - BASES[1].x, f1B.pos.z - BASES[1].z) > 4.5;
+  const isPlayer1B = isPlayerFielding() && game.playerPos === '1B';
+  const player1BDistBag = Math.hypot(player.pos.x - BASES[1].x, player.pos.z - BASES[1].z);
+  const ballTo1BSide = pl.la < 12 && (pl.spray < -16 || state.ballPos.x < -10);
+  const firstBaseOffBag = isPlayer1B
+    ? ((pl.tag === '軟弱滾地' && pl.spray < 0) || (pl.fielderId === '1B' && player1BDistBag > 4.5) || (!pl.fielded && ballTo1BSide && player1BDistBag > 8.5))
+    : ((primaryChaser === f1B || pl.fielderId === '1B') || Math.hypot(f1B.pos.x - BASES[1].x, f1B.pos.z - BASES[1].z) > 4.5);
   if (firstBaseOffBag) {
     const pTarget = pl.tag === '軟弱滾地' ? new THREE.Vector3(-23, 0, 23) : BASES[1];
     moveObjToward(pitcherMesh.position, pTarget, 7.4, dt);
@@ -1672,6 +1690,8 @@ function updateFieldersAndCoverage(dt) {
         moveObjToward(f.pos, BASES[1], f.speed, dt);
       } else if (ballInOutfield && cutoffId === '2B') {
         moveObjToward(f.pos, cutPos, f.speed, dt);
+      } else if (!ballInOutfield && (pl.spray < -16 || pl.fielderId === '1B')) {
+        moveObjToward(f.pos, new THREE.Vector3(-12, 0, 31), f.speed, dt);
       } else {
         moveObjToward(f.pos, BASES[2], f.speed, dt);
       }
@@ -1792,7 +1812,7 @@ function updateLivePlay(dt, now) {
 
     if (isPlayerFielding()) {
       const horiz = Math.hypot(state.ballPos.x - player.pos.x, state.ballPos.z - player.pos.z);
-      const canCatch = (game.playerPos === 'SS') ? true : (state.ballVel.y < 0);
+      const canCatch = POS_MAP[game.playerPos].isIF ? true : (state.ballVel.y < 0);
       if (!pl.landed && horiz <= (player.diving ? 2.85 : 2.15) && state.ballPos.y <= 2.65 && state.ballPos.y >= 0.15 && canCatch) {
         handleFlyOut(game.playerPos, true);
         return;
@@ -1815,17 +1835,24 @@ function updateLivePlay(dt, now) {
   } else if (player.hasBall) {
     ballMesh.position.set(player.pos.x, 0.9, player.pos.z);
     ballShadow.position.set(player.pos.x, 0.07, player.pos.z);
-    if (pl.playerCoverBase && isPlayerDefense() && game.playerPos === 'SS') {
-      const bPos = BASES[pl.playerCoverBase % 4];
-      if (Math.hypot(player.pos.x - bPos.x, player.pos.z - bPos.z) < 1.35) {
-        AudioFX.glovePop();
-        const tb = pl.playerCoverBase;
-        pl.playerCoverBase = 0;
-        pl.throwTargetBase = tb;
-        pl.throwTargetFielder = { id: 'SS(你)', pos: player.pos, isPlayer: true, steppedBag: true };
-        player.hasBall = false;
-        resolveThrowArrival();
-        return;
+    if (isPlayerIF()) {
+      let stepBase = pl.playerCoverBase || 0;
+      if (!stepBase && game.playerPos === '1B' && !pl.flyCaught && !pl.selfStepped1B) {
+        const batterTo1B = liveRunners.some(r => !r.out && !r.scored && !r.retreating && r.baseTo === 1 && r.progress > 0.05 && r.progress < 0.99);
+        if (batterTo1B) stepBase = 1;
+      }
+      if (stepBase) {
+        const bPos = BASES[stepBase % 4];
+        if (Math.hypot(player.pos.x - bPos.x, player.pos.z - bPos.z) < 1.35) {
+          AudioFX.glovePop();
+          pl.playerCoverBase = 0;
+          if (stepBase === 1) pl.selfStepped1B = true;
+          pl.throwTargetBase = stepBase;
+          pl.throwTargetFielder = { id: `${game.playerPos}(你)`, pos: player.pos, isPlayer: true, steppedBag: true };
+          player.hasBall = false;
+          resolveThrowArrival();
+          return;
+        }
       }
     }
   } else if (pl.selfCoverBase && pl.fielderRef) {
@@ -2067,7 +2094,7 @@ function updateLivePlay(dt, now) {
     } else if (pl.playerCoverBase) {
       const b = BASES[pl.playerCoverBase % 4];
       aim.set(b.x, 1.1, b.z);
-    } else if (game.playerPos === 'SS') {
+    } else if (POS_MAP[game.playerPos].isIF) {
       const tb = getBestThrowTargetBase(true);
       const tPos = BASES[tb % 4];
       if (Math.hypot(player.pos.x - tPos.x, player.pos.z - tPos.z) > 3.5) aim.set(tPos.x, 1.3, tPos.z);
@@ -2075,6 +2102,25 @@ function updateLivePlay(dt, now) {
       else aim.set(0, 1.3, 18.44);
     }
     lookTarget.lerp(aim, 0.16);
+    camera.lookAt(lookTarget);
+  } else if (isPlayerFielding() && game.playerPos === '1B' && pl.la < 12 && pl.tag !== '車布邊' && (pl.spray >= -16 || (pl.fielded && pl.fielderId !== '1B')) && (pl.fielded || state.ballPos.z <= 42)) {
+    const b1 = BASES[1];
+    const dist1B = Math.hypot(player.pos.x - b1.x, player.pos.z - b1.z);
+    const incomingTo1B = pl.throwActive && pl.throwTargetBase === 1;
+    const focus = (!pl.throwActive && pl.fielderRef && pl.fielderRef.pos)
+      ? new THREE.Vector3(pl.fielderRef.pos.x, 1.35, pl.fielderRef.pos.z)
+      : ballMesh.position;
+    if (dist1B > 1.5 && !incomingTo1B) {
+      const camFwd = new THREE.Vector3();
+      camera.getWorldDirection(camFwd);
+      camFwd.y = 0;
+      if (camFwd.lengthSq() > 0.0001) camFwd.normalize();
+      const to1B = new THREE.Vector3(b1.x - player.pos.x, 0, b1.z - player.pos.z).normalize();
+      if (camFwd.dot(to1B) > -0.15) lookTarget.lerp(new THREE.Vector3(b1.x, 0.8, b1.z), 0.16);
+      else lookTarget.lerp(focus, 0.18);
+    } else {
+      lookTarget.lerp(focus, 0.2);
+    }
     camera.lookAt(lookTarget);
   } else if (isPlayerDefense() || !(isPlayerOffense() && (game.playerBase > 0 || pl.isMeBatting))) {
     lookTarget.lerp(ballMesh.position, 0.2);
@@ -2847,7 +2893,7 @@ function updateCFMovement(dt, now) {
   }
   const r = Math.hypot(player.pos.x, player.pos.z);
   if (r > wallRadius - 1.2) { player.pos.x *= (wallRadius - 1.2) / r; player.pos.z *= (wallRadius - 1.2) / r; }
-  const minZ = (state.mode === 'game' && game.playerPos === 'SS') ? 10 : 36;
+  const minZ = (state.mode === 'game' && POS_MAP[game.playerPos].isIF) ? 4 : 36;
   if (player.pos.z < minZ) player.pos.z = minZ;
   camera.position.copy(player.pos);
 }
