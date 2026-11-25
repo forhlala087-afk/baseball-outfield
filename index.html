@@ -1636,11 +1636,11 @@ function launchSimPitch(isDefense) {
   ballMesh.position.set(0, 1.85, 18.44);
 
   const r = Math.random();
-  if (r < 0.24) game.simResult = 'BALL';
-  else if (r < 0.42) game.simResult = 'STRIKE_LOOK';
-  else if (r < 0.54) game.simResult = 'STRIKE_SWING';
-  else if (r < 0.62) game.simResult = 'FOUL_FLY';
-  else if (r < 0.69) game.simResult = 'FOUL_GROUND';
+  if (r < 0.36) game.simResult = 'BALL';
+  else if (r < 0.51) game.simResult = 'STRIKE_LOOK';
+  else if (r < 0.61) game.simResult = 'STRIKE_SWING';
+  else if (r < 0.69) game.simResult = 'FOUL_FLY';
+  else if (r < 0.76) game.simResult = 'FOUL_GROUND';
   else game.simResult = 'IN_PLAY';
 
   if (!game.steal && (!isPlayerOffense() || game.playerBase === 0)) {
@@ -3127,7 +3127,7 @@ function launchPlayerAtBatPitch() {
   game.pitchKmh = picked.kmh;
   game.pitchDur = picked.pt.dur + (Math.random() * 0.04 - 0.02);
 
-  const isStrike = Math.random() < 0.60;
+  const isStrike = Math.random() < 0.54;
   game.pitchIsStrike = isStrike;
   if (isStrike) {
     game.pitchTarget.set((Math.random() - 0.5) * 0.44, 0.62 + Math.random() * 0.56, 0.22);
