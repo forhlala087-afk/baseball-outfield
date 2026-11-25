@@ -1657,71 +1657,83 @@ function generateBattedBallParams() {
   const isOF = isPlayerFielding() && !POS_MAP[game.playerPos].isIF;
 
   // 內野高飛球（界內高飛 or 界外高飛）
-  if (r < (isIF ? 0.11 : 0.05)) {
+  if (r < (isIF ? 0.08 : 0.04)) {
     const isFoulPop = Math.random() < 0.38;
     const foulSign = is1B && Math.random() < 0.65 ? -1 : (Math.random() > 0.5 ? 1 : -1);
     const spray = isFoulPop ? foulSign * (52 + Math.random() * 14) : (Math.random() * 44 - 22);
     return { ev: 20 + Math.random() * 6, la: 62 + Math.random() * 14, spray, spin: 0.4, tag: isFoulPop ? '內野界外高飛' : '內野高飛' };
   }
   // 一／三壘方向強勁滾地球（可抓雙殺）
-  if (r < (isIF ? 0.23 : 0.14)) {
+  if (r < (isIF ? 0.18 : 0.11)) {
     const sign = is1B ? (Math.random() < 0.45 ? -1 : 1) : (Math.random() < 0.5 ? -1 : 1);
     return { ev: 36 + Math.random() * 6, la: -7 + Math.random() * 5, spray: sign * (24 + Math.random() * 13), spin: 0.25, tag: '強勁滾地' };
   }
-  // 一／三壘方向軟弱滾地球（需往前衝處理、二壘手補位一壘）
-  if (r < (isIF ? 0.31 : 0.20)) {
+  // 一／三壘方向軟弱滾地球
+  if (r < (isIF ? 0.24 : 0.15)) {
     const sign = is1B ? (Math.random() < 0.6 ? -1 : 1) : (Math.random() < 0.5 ? -1 : 1);
     return { ev: 18 + Math.random() * 6, la: -8 + Math.random() * 6, spray: sign * (22 + Math.random() * 15), spin: 0.2, tag: '軟弱滾地' };
   }
-  // 一般內野滾地球（守內野時機率拉高）
-  if (r < (isIF ? 0.55 : (isOF ? 0.26 : 0.35))) {
-    const spray = isSS && Math.random() < 0.6
+  // 一般內野滾地球（下修比例，減少無聊滾地出局）
+  if (r < (isIF ? 0.40 : (isOF ? 0.21 : 0.27))) {
+    const spray = isSS && Math.random() < 0.55
       ? (4 + Math.random() * 24)
       : (Math.random() * 56 - 28);
-    return { ev: 28 + Math.random() * 10, la: -7 + Math.random() * 6, spray, spin: 0.3, tag: '' };
+    return { ev: 28 + Math.random() * 9, la: -7 + Math.random() * 6, spray, spin: 0.3, tag: '' };
   }
-  // 內外野中間三不管地帶飛球
-  if (r < (isIF ? 0.64 : 0.44)) {
+  // 【新增】強勁穿越滾地安打（中線投手方向 / 一二壘間 / 三游間）
+  if (r < (isIF ? 0.51 : 0.39)) {
+    const holeRoll = Math.random();
+    let spray;
+    if (holeRoll < 0.36) spray = Math.random() * 8 - 4;                // 中線投手方向穿越
+    else if (holeRoll < 0.68) spray = -(22.5 + Math.random() * 5.5);   // 一二壘間穿越
+    else spray = 22.5 + Math.random() * 5.5;                           // 三游間穿越
+    return { ev: 43 + Math.random() * 6, la: -2 + Math.random() * 4.5, spray, spin: 0.2, tag: '穿越安打' };
+  }
+  // 內外野中間三不管地帶德州安打／飛球
+  if (r < (isIF ? 0.60 : 0.48)) {
     let spray = Math.random() * 58 - 29;
-    if (isSS && Math.random() < 0.55) spray = 4 + Math.random() * 20;
-    else if (is1B && Math.random() < 0.45) spray = -(8 + Math.random() * 22);
-    return { ev: 26 + Math.random() * 5.5, la: 33 + Math.random() * 11, spray, spin: 0.75, tag: '三不管' };
+    if (isSS && Math.random() < 0.5) spray = 4 + Math.random() * 20;
+    else if (is1B && Math.random() < 0.4) spray = -(8 + Math.random() * 22);
+    return { ev: 26 + Math.random() * 5.5, la: 32 + Math.random() * 10, spray, spin: 0.75, tag: '三不管' };
   }
-  // 車布邊安打
-  if (r < (isIF ? 0.68 : 0.49)) {
+  // 車布邊長打
+  if (r < (isIF ? 0.65 : 0.54)) {
     const sign = Math.random() > 0.5 ? 1 : -1;
     return { ev: 44 + Math.random() * 6, la: 1 + Math.random() * 3, spray: sign * (42.8 + Math.random() * 1.8), spin: 0.15, tag: '車布邊' };
   }
-  // 平飛球
-  if (r < (isIF ? 0.76 : 0.59)) {
-    let spray = Math.random() * 72 - 36;
-    if (isSS && Math.random() < 0.45) spray = 6 + Math.random() * 20;
-    else if (is1B && Math.random() < 0.4) spray = -(14 + Math.random() * 22);
-    return { ev: 36 + Math.random() * 9, la: 10 + Math.random() * 9, spray, spin: 0.9, tag: '' };
+  // 【強化】強勁平飛安打（刻意打向中外野前、左中外／右中外縫隙）
+  if (r < (isIF ? 0.76 : 0.67)) {
+    const gapRoll = Math.random();
+    let spray;
+    if (gapRoll < 0.3) spray = Math.random() * 14 - 7;                 // 中外野前平飛
+    else if (gapRoll < 0.65) spray = 13 + Math.random() * 18;          // 左半邊平飛
+    else spray = -(13 + Math.random() * 18);                           // 右半邊平飛
+    if (isSS && Math.random() < 0.35) spray = 6 + Math.random() * 18;
+    return { ev: 38 + Math.random() * 7.5, la: 9 + Math.random() * 6, spray, spin: 0.85, tag: '平飛安打' };
   }
-  // 刁鑽找洞飛球（拉高一點仰角，變成五五波拚行進間接殺）
-  if (r < (isIF ? 0.82 : 0.68)) {
+  // 刁鑽找洞飛球（二壘安打／行進間接殺五五波）
+  if (r < (isIF ? 0.83 : 0.76)) {
     const sign = Math.random() < 0.5 ? 1 : -1;
-    let spray = sign * (Math.random() < 0.65 ? (10 + Math.random() * 7) : (32 + Math.random() * 7));
-    if (isOF && Math.random() < 0.55) {
-      if (game.playerPos === 'CF') spray = sign * (10 + Math.random() * 7);
-      else if (game.playerPos === 'LF') spray = Math.random() < 0.5 ? (10 + Math.random() * 7) : (32 + Math.random() * 7);
-      else if (game.playerPos === 'RF') spray = Math.random() < 0.5 ? -(10 + Math.random() * 7) : -(32 + Math.random() * 7);
+    let spray = sign * (Math.random() < 0.65 ? (11 + Math.random() * 8) : (32 + Math.random() * 7));
+    if (isOF && Math.random() < 0.5) {
+      if (game.playerPos === 'CF') spray = sign * (11 + Math.random() * 8);
+      else if (game.playerPos === 'LF') spray = Math.random() < 0.5 ? (11 + Math.random() * 8) : (32 + Math.random() * 7);
+      else if (game.playerPos === 'RF') spray = Math.random() < 0.5 ? -(11 + Math.random() * 8) : -(32 + Math.random() * 7);
     }
-    return { ev: 35 + Math.random() * 6.5, la: 18 + Math.random() * 11, spray, spin: 0.95, tag: '找洞飛球' };
+    return { ev: 36 + Math.random() * 6.5, la: 17 + Math.random() * 10, spray, spin: 0.95, tag: '找洞飛球' };
   }
-  // 越過頭頂深遠飛球／警戒區長打（偶爾警戒區接殺、偶爾越頂撞牆）
-  if (r < (isIF ? 0.87 : 0.75)) {
+  // 越過頭頂深遠飛球／警戒區長打
+  if (r < (isIF ? 0.88 : 0.83)) {
     let spray = Math.random() * 72 - 36;
-    if (isOF && Math.random() < 0.55) {
+    if (isOF && Math.random() < 0.5) {
       if (game.playerPos === 'CF') spray = Math.random() * 30 - 15;
       else if (game.playerPos === 'LF') spray = 12 + Math.random() * 24;
       else if (game.playerPos === 'RF') spray = -(12 + Math.random() * 24);
     }
-    return { ev: 42.5 + Math.random() * 4.5, la: 21 + Math.random() * 8.5, spray, spin: 0.95, tag: '越頂長打' };
+    return { ev: 43 + Math.random() * 4.5, la: 21 + Math.random() * 8, spray, spin: 0.95, tag: '越頂長打' };
   }
-  // 一般外野高飛球（壓低初速上限，維持穩定接殺與跑動接殺）
-  if (r < 0.975) {
+  // 一般外野高飛球（比例縮小，不再滿場飛球出局）
+  if (r < 0.965) {
     let spray = Math.random() * 74 - 37;
     if (isOF && Math.random() < 0.55) {
       if (game.playerPos === 'CF') spray = Math.random() * 26 - 13;
@@ -1730,7 +1742,7 @@ function generateBattedBallParams() {
     }
     return { ev: 34.5 + Math.random() * 7.5, la: 28 + Math.random() * 17, spray, spin: 1.05, tag: '' };
   }
-  // 全壘打級（降至 2.5%）
+  // 全壘打級（微調至 3.5%）
   return { ev: 49 + Math.random() * 4.5, la: 26 + Math.random() * 9, spray: Math.random() * 68 - 34, spin: 1.2, tag: '' };
 }
 function spawnLiveRunners(isMeBatting) {
@@ -1785,6 +1797,10 @@ function startLiveBallInPlay(ev, la, spray, spin, isMeBatting = false, tag = '')
   game.subPhase = 'LIVE_PLAY';
   if (tag === '車布邊') {
     setTicker('⚡ 車布邊強襲球！貼著邊線滾過去！');
+  } else if (tag === '穿越安打') {
+    setTicker(Math.abs(spray) < 6 ? '⚡ 中線強襲滾地球！穿過投手丘！' : '⚡ 強勁滾地球找洞穿出內野！');
+  } else if (tag === '平飛安打') {
+    setTicker('⚡ 強勁平飛球！');
   } else if (isPlayerFielding() && game.playerPos === 'CF' && Math.abs(spray) < 16 && Math.hypot(sim.land.x, sim.land.z) > 55) {
     setTicker('⚡ 打向中外野！快追球！');
   } else {
