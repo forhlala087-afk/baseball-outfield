@@ -224,7 +224,8 @@
   }
   #call-btn:active { transform: scale(0.94); }
   #call-btn.called { background: rgba(46, 125, 50, 0.94); border-color: #a5d6a7; }
-  #call-btn.locked { background: rgba(69, 90, 100, 0.78); border-color: rgba(255,255,255,0.28); opacity: 0.72; }
+  #call-btn.locked { background: rgba(15, 28, 46, 0.72); border-color: rgba(255,255,255,0.28); opacity: 0.38; }
+  #call-btn.taken { background: rgba(69, 90, 100, 0.86); border-color: rgba(255,255,255,0.38); opacity: 0.85; }
 
   #start-btn-wrap { position: fixed; bottom: 20%; left: 50%; transform: translateX(-50%); z-index: 16; }
   #minimap {
@@ -597,10 +598,10 @@ const batterMesh = createPlayerSilhouette(0.9, 0.2, 0xc62828);
 const catcherMesh = createPlayerSilhouette(0, -1.6, 0x1565c0);
 
 const FIELDER_DEFS = [
-  { id: '1B', x: -14.8, z: 25.5, type: 'IF', speed: 7.4, reach: 2.1 },
+  { id: '1B', x: -18.2, z: 23.6, type: 'IF', speed: 7.4, reach: 2.1 },
   { id: '2B', x: -8.5, z: 33.5, type: 'IF', speed: 7.9, reach: 2.2 },
   { id: 'SS', x: 8.5, z: 33.5, type: 'IF', speed: 8.1, reach: 2.2 },
-  { id: '3B', x: 14.8, z: 25.5, type: 'IF', speed: 7.5, reach: 2.1 },
+  { id: '3B', x: 18.2, z: 23.6, type: 'IF', speed: 7.5, reach: 2.1 },
   { id: 'RF', x: -37, z: 82, type: 'OF', speed: 8.3, reach: 2.4 },
   { id: 'LF', x: 37, z: 82, type: 'OF', speed: 8.3, reach: 2.4 },
   { id: 'CF', x: 0, z: 92, type: 'OF', speed: 8.6, reach: 2.5 }
@@ -734,7 +735,7 @@ const POS_MAP = {
   LF: { name: '左外野手', pos: new THREE.Vector3(37, 1.7, 82), isIF: false },
   RF: { name: '右外野手', pos: new THREE.Vector3(-37, 1.7, 82), isIF: false },
   SS: { name: '游擊手', pos: new THREE.Vector3(8.5, 1.7, 33.5), isIF: true },
-  '1B': { name: '一壘手', pos: new THREE.Vector3(-14.8, 1.7, 25.5), isIF: true },
+  '1B': { name: '一壘手', pos: new THREE.Vector3(-18.2, 1.7, 23.6), isIF: true },
   DH: { name: '指定打擊', pos: DUGOUT_POS.clone(), isIF: false }
 };
 const START_POS = POS_MAP.CF.pos.clone();
@@ -919,20 +920,23 @@ function updateDiveBtnState() {
     const is1BReady = b.dataset.base === '1' && game.playerPos === '1B';
     b.classList.toggle('ready', showBaseBtns && game.subPhase === 'LIVE_PLAY' && (player.hasBall || is1BReady));
   });
-  const canShowCall = showBaseBtns && game.subPhase === 'LIVE_PLAY' && game.play
-    && !game.play.landed && !game.play.fielded && !game.play.isHR && game.play.la > 14 && !game.play.collided;
-  callBtn.style.display = canShowCall ? 'block' : 'none';
+  callBtn.style.display = showBaseBtns ? 'block' : 'none';
   callBtn.className = '';
-  if (canShowCall) {
+  const canCallNow = showBaseBtns && game.subPhase === 'LIVE_PLAY' && game.play
+    && !game.play.landed && !game.play.fielded && !game.play.isHR && game.play.la > 14 && !game.play.collided;
+  if (canCallNow) {
     if (game.play.callerIsPlayer) {
       callBtn.textContent = '✅ MY BALL';
       callBtn.classList.add('called');
     } else if (game.play.callerId) {
       callBtn.textContent = `🔒 ${game.play.callerId}已喊`;
-      callBtn.classList.add('locked');
+      callBtn.classList.add('taken');
     } else {
       callBtn.textContent = '📣 喊聲';
     }
+  } else if (showBaseBtns) {
+    callBtn.textContent = '🔒 喊聲';
+    callBtn.classList.add('locked');
   }
   if (state.mode !== 'game' || game.subPhase !== 'LIVE_PLAY' || !isPlayerDefense() || !game.play) {
     diveBtn.textContent = '撲接';
@@ -1761,7 +1765,18 @@ function updateFieldersAndCoverage(dt) {
           const ix = state.ballPos.x + dirX * Math.max(0, proj);
           const iz = state.ballPos.z + dirZ * Math.max(0, proj);
           const latDist = Math.hypot(ix - f.home.x, iz - f.home.z);
-          const maxLat = pl.tag === '軟弱滾地' ? 16 : 12;
+          const isCornerIF = f.id === '1B' || f.id === '3B';
+          const maxLat = pl.tag === '軟弱滾地' ? 16 : (isCornerIF ? 7.5 : 9.5);
+          if (isPlayerIF() && pl.tag !== '軟弱滾地') {
+            const pHome = getPlayerStartPos();
+            const pProj = (pHome.x - state.ballPos.x) * dirX + (pHome.z - state.ballPos.z) * dirZ;
+            if (pProj >= -1.5) {
+              const pix = state.ballPos.x + dirX * Math.max(0, pProj);
+              const piz = state.ballPos.z + dirZ * Math.max(0, pProj);
+              const pLat = Math.hypot(pix - pHome.x, piz - pHome.z);
+              if (pLat < 6.5 && pLat + 1.5 < latDist) return;
+            }
+          }
           if (latDist < maxLat) {
             const targetPt = (pl.tag === '軟弱滾地' || hSpd < 10)
               ? state.ballPos.clone()
@@ -1781,7 +1796,6 @@ function updateFieldersAndCoverage(dt) {
           if (!f.mesh.visible || f.stunTimer > 0) return;
           if (pl.tag === '車布邊' && f.type === 'IF') return;
           const t = (!pl.landed && (f.type === 'OF' || pl.la > 18)) ? state.meta.land : state.ballPos;
-          const maxRange = f.type === 'IF' ? (pl.tag === '軟弱滾地' ? 20 : (pl.la > 18 ? 18 : 15)) : 52;
           if (Math.hypot(t.x - f.home.x, t.z - f.home.z) < maxRange) {
             const d = Math.hypot(t.x - f.pos.x, t.z - f.pos.z);
             if (d < bestDist) { bestDist = d; primaryChaser = f; }
@@ -1795,10 +1809,10 @@ function updateFieldersAndCoverage(dt) {
       const land = state.meta.land;
       const pLandDist = isPlayerFielding() ? Math.hypot(land.x - player.pos.x, land.z - player.pos.z) : Infinity;
       const pHomeDist = isPlayerFielding() ? Math.hypot(land.x - getPlayerStartPos().x, land.z - getPlayerStartPos().z) : Infinity;
-      if (isPlayerFielding() && !pl.callerId && pHomeDist < 6.5) {
-        if (primaryChaser && Math.hypot(land.x - primaryChaser.pos.x, land.z - primaryChaser.pos.z) > pLandDist + 4) primaryChaser = null;
-        if (bloopIF && Math.hypot(land.x - bloopIF.pos.x, land.z - bloopIF.pos.z) > pLandDist + 4) bloopIF = null;
-        if (bloopOF && Math.hypot(land.x - bloopOF.pos.x, land.z - bloopOF.pos.z) > pLandDist + 4) bloopOF = null;
+      if (isPlayerFielding() && !pl.callerId && pHomeDist < 9.5) {
+        if (primaryChaser && Math.hypot(land.x - primaryChaser.pos.x, land.z - primaryChaser.pos.z) > pLandDist + 2.5) primaryChaser = null;
+        if (bloopIF && Math.hypot(land.x - bloopIF.pos.x, land.z - bloopIF.pos.z) > pLandDist + 2.5) bloopIF = null;
+        if (bloopOF && Math.hypot(land.x - bloopOF.pos.x, land.z - bloopOF.pos.z) > pLandDist + 2.5) bloopOF = null;
       }
       if (!pl.callerId && pl.elapsed >= 0.45) {
         const candidates = [primaryChaser, bloopIF, bloopOF].filter(f => f && f.mesh.visible && f.stunTimer <= 0);
@@ -1807,7 +1821,7 @@ function updateFieldersAndCoverage(dt) {
           const d = Math.hypot(land.x - f.pos.x, land.z - f.pos.z);
           if (d < bestAIDist) { bestAIDist = d; bestAI = f; }
         });
-        if (bestAI && bestAIDist < 20 && (!isPlayerFielding() || bestAIDist <= pLandDist + 1.5 || (pl.elapsed >= 0.9 && bestAIDist < 5.5))) {
+        if (bestAI && bestAIDist < 20 && (!isPlayerFielding() || bestAIDist <= pLandDist - 1.0 || (pl.elapsed >= 0.95 && bestAIDist < 6.5))) {
           pl.callerId = bestAI.id;
           pl.callerIsPlayer = false;
           primaryChaser = bestAI;
