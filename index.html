@@ -1472,7 +1472,7 @@ function spawnLiveRunners(isMeBatting) {
       const m = createPlayerSilhouette(BASES[i + 1].x, BASES[i + 1].z, color);
       if (isMe) m.visible = false;
       liveRunners.push({
-        mesh: m, baseFrom: i + 1, baseTo: i + 2, progress: 0,
+        mesh: m, startBase: i + 1, baseFrom: i + 1, baseTo: i + 2, progress: 0,
         speed: 0.25 + Math.random() * 0.03, isBatter: false, isMe,
         isForced, leftEarly: false, out: false, scored: false, stopped: false, retreating: false
       });
@@ -1481,7 +1481,7 @@ function spawnLiveRunners(isMeBatting) {
   const bm = createPlayerSilhouette(0, 0, color);
   if (isMeBatting) bm.visible = false;
   liveRunners.push({
-    mesh: bm, baseFrom: 0, baseTo: 1, progress: 0,
+    mesh: bm, startBase: 0, baseFrom: 0, baseTo: 1, progress: 0,
     speed: 0.26, isBatter: true, isMe: isMeBatting,
     isForced: true, leftEarly: false, out: false, scored: false, stopped: false, retreating: false
   });
@@ -2055,7 +2055,7 @@ function updateLivePlay(dt, now) {
     }
 
     if (r.retreating) {
-      if ((pushedByTrailer && !blockedByLead) || (r.isMe && isPlayerOffense() && holdRun && !r.leftEarly)) {
+      if ((pushedByTrailer && !blockedByLead && !r.leftEarly) || (r.isMe && isPlayerOffense() && holdRun && !r.leftEarly)) {
         r.retreating = false;
       } else {
         r.progress -= r.speed * 1.25 * dt;
@@ -2072,8 +2072,14 @@ function updateLivePlay(dt, now) {
         }
         anyMoving = true;
         if (r.progress <= 0) {
-          r.progress = 0; r.retreating = false; r.leftEarly = false; r.baseTo = r.baseFrom; r.stopped = true;
-          if (!r.isMe) r.mesh.position.copy(BASES[r.baseFrom]);
+          if (r.leftEarly && r.baseFrom > r.startBase) {
+            r.baseTo = r.baseFrom;
+            r.baseFrom -= 1;
+            r.progress = 1;
+          } else {
+            r.progress = 0; r.retreating = false; r.leftEarly = false; r.baseTo = r.baseFrom; r.stopped = true;
+            if (!r.isMe) r.mesh.position.copy(BASES[r.baseFrom]);
+          }
         }
         return;
       }
@@ -2245,11 +2251,32 @@ function handleFlyOut(fielderId, isPlayerCF) {
   const meRunning = isPlayerOffense() && game.playerBase > 0;
   let tagTarget = 0;
   let doubleOffTarget = 0;
+  let hasPassedBase = false;
   onBase.forEach(r => {
-    if (r.isMe && r.progress > 0.08) {
+    const origBase = r.startBase !== undefined ? r.startBase : r.baseFrom;
+    const passedBase = r.scored || r.baseFrom > origBase;
+    if (passedBase || (r.isMe && r.progress > 0.08)) {
+      if (r.scored) {
+        r.scored = false;
+        r.pendingScore = false;
+        if (!r.isMe) r.mesh.visible = true;
+        r.baseFrom = 3;
+        r.baseTo = 4;
+        r.progress = 0.99;
+      } else if (r.baseFrom > origBase && r.progress <= 0.01) {
+        r.baseTo = r.baseFrom;
+        r.baseFrom = r.baseTo - 1;
+        r.progress = 0.99;
+      }
+      r.stopped = false;
       r.leftEarly = true;
       r.retreating = true;
-      if (r.manualControl && r.progress > 0.25) doubleOffTarget = Math.max(doubleOffTarget, r.baseFrom);
+      if (passedBase) {
+        hasPassedBase = true;
+        doubleOffTarget = Math.max(doubleOffTarget, origBase);
+      } else if (r.manualControl && r.progress > 0.25) {
+        doubleOffTarget = Math.max(doubleOffTarget, origBase);
+      }
     } else if (!r.isMe && r.progress > 0.02) {
       r.retreating = true;
     } else if (r.baseFrom >= 2 && state.ballPos.z >= 82 && pl.la >= 20) {
@@ -2258,7 +2285,7 @@ function handleFlyOut(fielderId, isPlayerCF) {
       tagTarget = Math.max(tagTarget, r.baseTo);
     }
   });
-  const targetBase = tagTarget > 0 ? tagTarget : doubleOffTarget;
+  const targetBase = hasPassedBase ? doubleOffTarget : (tagTarget > 0 ? tagTarget : doubleOffTarget);
 
   if (isPlayerCF) {
     player.hasBall = true;
@@ -2477,8 +2504,10 @@ function resolveThrowArrival() {
     if (r.out || r.scored) return;
     const isForcePlay = r.isForced && !pl.flyCaught;
     const minProg = isForcePlay ? 0.05 : 0.5;
+    const origBase = r.startBase !== undefined ? r.startBase : r.baseFrom;
     const caughtAdvancing = r.baseTo === tb && r.progress > minProg && r.progress < 0.99 && (!r.retreating || r.progress > 0.55);
-    const caughtOffBase = r.baseFrom === tb && ((r.leftEarly && r.progress > 0.05) || (r.retreating && r.progress > 0.08));
+    const caughtOffBase = (r.leftEarly && origBase === tb && (r.baseFrom > origBase || r.progress > 0.05))
+      || (r.retreating && r.baseFrom === tb && r.progress > 0.08);
     if (caughtAdvancing || caughtOffBase) {
       r.out = true;
       r.mesh.visible = false;
@@ -2529,10 +2558,16 @@ function resolveThrowArrival() {
   }
 
   const advancing = liveRunners.filter(r => !r.out && !r.scored && !r.stopped && !r.retreating && r.progress > 0.1 && r.baseTo !== tb);
-  const scramblingBack = liveRunners.filter(r => !r.out && !r.scored && !r.stopped && r.retreating && r.progress > 0.25 && r.baseFrom >= 1 && r.baseFrom !== tb);
+  const scramblingBack = liveRunners.filter(r => {
+    if (r.out || r.scored || r.stopped || !r.retreating) return false;
+    const backBase = r.leftEarly ? (r.startBase !== undefined ? r.startBase : r.baseFrom) : r.baseFrom;
+    return backBase >= 1 && backBase !== tb && (r.baseFrom > backBase || r.progress > 0.25);
+  });
   const nextTargetRunner = advancing[0] || scramblingBack[0];
   if (nextTargetRunner && (pl.extraThrows || 0) < 2) {
-    const nextTb = nextTargetRunner.retreating ? nextTargetRunner.baseFrom : nextTargetRunner.baseTo;
+    const nextTb = nextTargetRunner.retreating
+      ? (nextTargetRunner.leftEarly ? (nextTargetRunner.startBase !== undefined ? nextTargetRunner.startBase : nextTargetRunner.baseFrom) : nextTargetRunner.baseFrom)
+      : nextTargetRunner.baseTo;
     const nextCover = getBaseCoverFielder(nextTb, '');
     if (nextCover) {
       pl.extraThrows = (pl.extraThrows || 0) + 1;
