@@ -1122,8 +1122,18 @@ function getBaseCoverFielder(tb, excludeId = '') {
 
 function throwBallFromCF(manualBase = 0, forceCutoff = false) {
   if (!player.hasBall || !game.play) return;
-  player.hasBall = false;
   const pl = game.play;
+  if (!forceCutoff && manualBase === 1 && game.playerPos === '1B') {
+    const cover1B = getBaseCoverFielder(1, 'PLAYER');
+    const myDist1B = Math.hypot(player.pos.x - BASES[1].x, player.pos.z - BASES[1].z);
+    const coverDist1B = cover1B ? Math.hypot(cover1B.pos.x - BASES[1].x, cover1B.pos.z - BASES[1].z) : Infinity;
+    const isCovering1B = cover1B && (cover1B.id === 'P' || (cover1B.id === '2B' && pl.tag === '軟弱滾地') || coverDist1B < 8);
+    if (!isCovering1B || myDist1B <= coverDist1B) {
+      setBanner('直接踩一壘！', '');
+      return;
+    }
+  }
+  player.hasBall = false;
   pl.waitingEnd = false;
   pl.endCooldown = 0;
   pl.playerCoverBase = 0;
@@ -2098,7 +2108,9 @@ function updateLivePlay(dt, now) {
     } else if (POS_MAP[game.playerPos].isIF) {
       const tb = getBestThrowTargetBase(true);
       const tPos = BASES[tb % 4];
-      if (Math.hypot(player.pos.x - tPos.x, player.pos.z - tPos.z) > 3.5) aim.set(tPos.x, 1.3, tPos.z);
+      if (game.playerPos === '1B' && tb === 1 && !pl.selfStepped1B && !pl.flyCaught && Math.hypot(player.pos.x - BASES[1].x, player.pos.z - BASES[1].z) > 1.35) {
+        aim.set(BASES[1].x, 1.0, BASES[1].z);
+      } else if (Math.hypot(player.pos.x - tPos.x, player.pos.z - tPos.z) > 3.5) aim.set(tPos.x, 1.3, tPos.z);
       else if (Math.hypot(player.pos.x - BASES[1].x, player.pos.z - BASES[1].z) > 3.5) aim.set(BASES[1].x, 1.3, BASES[1].z);
       else aim.set(0, 1.3, 18.44);
     }
@@ -2107,20 +2119,22 @@ function updateLivePlay(dt, now) {
   } else if (isPlayerFielding() && game.playerPos === '1B' && pl.la < 12 && pl.tag !== '車布邊' && (pl.spray >= -16 || (pl.fielded && pl.fielderId !== '1B')) && (pl.fielded || state.ballPos.z <= 42)) {
     const b1 = BASES[1];
     const dist1B = Math.hypot(player.pos.x - b1.x, player.pos.z - b1.z);
+    if (dist1B <= 1.6) pl.reached1B = true;
+    else if (dist1B > 3.2) pl.reached1B = false;
     const incomingTo1B = pl.throwActive && pl.throwTargetBase === 1;
     const focus = (!pl.throwActive && pl.fielderRef && pl.fielderRef.pos)
       ? new THREE.Vector3(pl.fielderRef.pos.x, 1.35, pl.fielderRef.pos.z)
       : ballMesh.position;
-    if (dist1B > 1.5 && !incomingTo1B) {
-      const camFwd = new THREE.Vector3();
-      camera.getWorldDirection(camFwd);
-      camFwd.y = 0;
-      if (camFwd.lengthSq() > 0.0001) camFwd.normalize();
+    if (pl.elapsed < 0.45 && !pl.fielded) {
+      lookTarget.lerp(ballMesh.position, 0.22);
+    } else if (!pl.reached1B && !incomingTo1B) {
       const to1B = new THREE.Vector3(b1.x - player.pos.x, 0, b1.z - player.pos.z).normalize();
-      if (camFwd.dot(to1B) > -0.15) lookTarget.lerp(new THREE.Vector3(b1.x, 0.8, b1.z), 0.16);
-      else lookTarget.lerp(focus, 0.18);
+      const toHome = new THREE.Vector3(-player.pos.x, 0, -player.pos.z).normalize();
+      const assistDir = to1B.multiplyScalar(0.8).addScaledVector(toHome, 0.2).normalize();
+      const assistAim = new THREE.Vector3(player.pos.x + assistDir.x * 10, 1.25, player.pos.z + assistDir.z * 10);
+      lookTarget.lerp(assistAim, 0.1);
     } else {
-      lookTarget.lerp(focus, 0.2);
+      lookTarget.lerp(focus, 0.18);
     }
     camera.lookAt(lookTarget);
   } else if (isPlayerDefense() || !(isPlayerOffense() && (game.playerBase > 0 || pl.isMeBatting))) {
