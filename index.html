@@ -1390,20 +1390,20 @@ function generateBattedBallParams() {
   }
   // 一／三壘方向強勁滾地球（可抓雙殺）
   if (r < (isIF ? 0.23 : 0.14)) {
-    const sign = is1B ? (Math.random() < 0.6 ? -1 : 1) : (Math.random() < 0.5 ? -1 : 1);
-    return { ev: 38 + Math.random() * 7, la: 2 + Math.random() * 4, spray: sign * (26 + Math.random() * 13), spin: 0.25, tag: '強勁滾地' };
+    const sign = is1B ? (Math.random() < 0.45 ? -1 : 1) : (Math.random() < 0.5 ? -1 : 1);
+    return { ev: 36 + Math.random() * 6, la: -7 + Math.random() * 5, spray: sign * (24 + Math.random() * 13), spin: 0.25, tag: '強勁滾地' };
   }
   // 一／三壘方向軟弱滾地球（需往前衝處理、二壘手補位一壘）
   if (r < (isIF ? 0.31 : 0.20)) {
-    const sign = is1B ? (Math.random() < 0.65 ? -1 : 1) : (Math.random() < 0.5 ? -1 : 1);
-    return { ev: 18 + Math.random() * 6, la: 1 + Math.random() * 4, spray: sign * (22 + Math.random() * 15), spin: 0.2, tag: '軟弱滾地' };
+    const sign = is1B ? (Math.random() < 0.6 ? -1 : 1) : (Math.random() < 0.5 ? -1 : 1);
+    return { ev: 18 + Math.random() * 6, la: -8 + Math.random() * 6, spray: sign * (22 + Math.random() * 15), spin: 0.2, tag: '軟弱滾地' };
   }
   // 一般內野滾地球（守內野時機率拉高）
   if (r < (isIF ? 0.55 : (isOF ? 0.26 : 0.35))) {
     const spray = isSS && Math.random() < 0.6
       ? (4 + Math.random() * 24)
       : (Math.random() * 56 - 28);
-    return { ev: 30 + Math.random() * 13, la: 2 + Math.random() * 6, spray, spin: 0.3, tag: '' };
+    return { ev: 28 + Math.random() * 10, la: -7 + Math.random() * 6, spray, spin: 0.3, tag: '' };
   }
   // 內外野中間三不管地帶飛球
   if (r < (isIF ? 0.64 : 0.44)) {
@@ -1651,7 +1651,10 @@ function updateFieldersAndCoverage(dt) {
     : new THREE.Vector3(THREE.MathUtils.clamp(state.ballPos.x * 0.48, -22, 22), 0, 52);
 
   let primaryChaser = null;
+  let chaserTarget = null;
   let bloopIF = null, bloopOF = null;
+  const f1B = getFielderById('1B');
+  const isPlayer1B = isPlayerFielding() && game.playerPos === '1B';
 
   if (!pl.fielded) {
     if (pl.tag === '三不管' && !pl.landed) {
@@ -1663,22 +1666,51 @@ function updateFieldersAndCoverage(dt) {
         if (f.type === 'OF' && d < 42 && d < bestOF) { bestOF = d; bloopOF = f; }
       });
     } else {
-      let bestDist = Infinity;
-      fielders.forEach(f => {
-        if (!f.mesh.visible) return;
-        if (pl.tag === '車布邊' && f.type === 'IF') return;
-        const t = (!pl.landed && f.type === 'OF') ? state.meta.land : state.ballPos;
-        const maxRange = f.type === 'IF' ? (pl.tag === '軟弱滾地' ? 20 : 15) : 52;
-        if (Math.hypot(t.x - f.home.x, t.z - f.home.z) < maxRange) {
-          const d = Math.hypot(t.x - f.pos.x, t.z - f.pos.z);
-          if (d < bestDist) { bestDist = d; primaryChaser = f; }
-        }
-      });
+      const isGrounder = pl.la <= 8 && pl.tag !== '車布邊';
+      if (isGrounder && state.ballPos.z < 40) {
+        const sp = THREE.MathUtils.degToRad(pl.spray);
+        const hSpd = Math.hypot(state.ballVel.x, state.ballVel.z);
+        const dirX = hSpd > 1 ? state.ballVel.x / hSpd : Math.sin(sp);
+        const dirZ = hSpd > 1 ? state.ballVel.z / hSpd : Math.cos(sp);
+        let bestIFDist = Infinity;
+        fielders.forEach(f => {
+          if (!f.mesh.visible || f.type !== 'IF') return;
+          if (isPlayer1B && pl.tag === '軟弱滾地' && pl.spray < -12 && f.id === '2B') return;
+          const rx = f.home.x - state.ballPos.x, rz = f.home.z - state.ballPos.z;
+          const proj = rx * dirX + rz * dirZ;
+          if (proj < -2.5) return;
+          const ix = state.ballPos.x + dirX * Math.max(0, proj);
+          const iz = state.ballPos.z + dirZ * Math.max(0, proj);
+          const latDist = Math.hypot(ix - f.home.x, iz - f.home.z);
+          const maxLat = pl.tag === '軟弱滾地' ? 16 : 12;
+          if (latDist < maxLat) {
+            const targetPt = (pl.tag === '軟弱滾地' || hSpd < 10)
+              ? state.ballPos.clone()
+              : new THREE.Vector3(ix, 0, iz);
+            const d = Math.hypot(targetPt.x - f.pos.x, targetPt.z - f.pos.z);
+            if (d < bestIFDist) {
+              bestIFDist = d;
+              primaryChaser = f;
+              chaserTarget = targetPt;
+            }
+          }
+        });
+      }
+      if (!primaryChaser) {
+        let bestDist = Infinity;
+        fielders.forEach(f => {
+          if (!f.mesh.visible) return;
+          if (pl.tag === '車布邊' && f.type === 'IF') return;
+          const t = (!pl.landed && f.type === 'OF') ? state.meta.land : state.ballPos;
+          const maxRange = f.type === 'IF' ? (pl.tag === '軟弱滾地' ? 20 : 15) : 52;
+          if (Math.hypot(t.x - f.home.x, t.z - f.home.z) < maxRange) {
+            const d = Math.hypot(t.x - f.pos.x, t.z - f.pos.z);
+            if (d < bestDist) { bestDist = d; primaryChaser = f; }
+          }
+        });
+      }
     }
   }
-
-  const f1B = getFielderById('1B');
-  const isPlayer1B = isPlayerFielding() && game.playerPos === '1B';
   const player1BDistBag = Math.hypot(player.pos.x - BASES[1].x, player.pos.z - BASES[1].z);
   const ballTo1BSide = pl.la < 12 && (pl.spray < -16 || state.ballPos.x < -10);
   const firstBaseOffBag = isPlayer1B
@@ -1697,7 +1729,9 @@ function updateFieldersAndCoverage(dt) {
     if (pl.selfCoverBase && f === pl.fielderRef) {
       moveObjToward(f.pos, BASES[pl.selfCoverBase % 4], f.speed, dt);
     } else if (!pl.fielded && (f === primaryChaser || f === bloopIF || f === bloopOF)) {
-      const target = (!pl.landed && (f.type === 'OF' || pl.tag === '三不管')) ? state.meta.land : state.ballPos;
+      const target = (f === primaryChaser && chaserTarget)
+        ? chaserTarget
+        : ((!pl.landed && (f.type === 'OF' || pl.tag === '三不管')) ? state.meta.land : state.ballPos);
       if (!(f.type === 'OF' && !pl.landed && pl.elapsed < 0.22)) {
         let chaseSpd = f.speed;
         if (f.type === 'OF' && !pl.landed) {
@@ -1852,7 +1886,7 @@ function updateLivePlay(dt, now) {
       const bDist = Math.hypot(state.ballPos.x - f.pos.x, state.ballPos.z - f.pos.z);
       if (!pl.landed && bDist <= f.reach && state.ballPos.y <= 2.6 && state.ballPos.y >= 0.15 && state.ballVel.y < 0) {
         handleFlyOut(f.id, false);
-      } else if (pl.landed && bDist <= (f.type === 'IF' ? 1.8 : 2.2) && state.ballPos.y < 1.6) {
+      } else if (pl.landed && bDist <= 2.2 && state.ballPos.y < 1.6) {
         if (pl.tag === '車布邊' && f.type === 'IF') return;
         handleAIFieldGroundBall(f);
       }
