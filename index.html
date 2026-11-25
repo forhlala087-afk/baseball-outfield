@@ -226,6 +226,47 @@
   #call-btn.called { background: rgba(46, 125, 50, 0.94); border-color: #a5d6a7; }
   #call-btn.locked { background: rgba(15, 28, 46, 0.72); border-color: rgba(255,255,255,0.28); opacity: 0.38; }
   #call-btn.taken { background: rgba(69, 90, 100, 0.86); border-color: rgba(255,255,255,0.38); opacity: 0.85; }
+  #run-pad {
+    position: fixed; right: 12px; bottom: max(18px, env(safe-area-inset-bottom) + 10px);
+    width: 184px; height: 184px; z-index: 16; display: none; pointer-events: none;
+  }
+  .run-base-btn {
+    position: absolute; width: 44px; height: 44px; border-radius: 50%;
+    background: rgba(15, 28, 46, 0.82); border: 2px solid rgba(255,255,255,0.38);
+    color: #fff; font-size: 15px; font-weight: 900; pointer-events: auto; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 3px 10px rgba(0,0,0,0.45); transition: transform 0.1s, background 0.15s;
+  }
+  .run-base-btn:active { transform: scale(0.9); }
+  .run-base-btn.target {
+    background: rgba(251, 140, 0, 0.95); border-color: #ffe0b2;
+    box-shadow: 0 0 12px rgba(251, 140, 0, 0.8);
+  }
+  #run-b2 { top: 0; left: 70px; }
+  #run-b1 { top: 70px; right: 0; }
+  #run-b4 { bottom: 0; left: 70px; }
+  #run-b3 { top: 70px; left: 0; }
+  .run-ret-btn {
+    position: absolute; width: 32px; height: 32px; border-radius: 50%;
+    background: rgba(21, 101, 192, 0.88); border: 2px solid #90caf9;
+    color: #fff; font-size: 14px; font-weight: 900; pointer-events: auto; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.45);
+  }
+  .run-ret-btn:active { transform: scale(0.9); }
+  #run-ret-1 { top: 24px; right: 24px; }
+  #run-ret-2 { top: 24px; left: 24px; }
+  #run-ret-3 { bottom: 24px; left: 24px; }
+  #run-center {
+    position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+    width: 62px; height: 62px; border-radius: 50%;
+    background: linear-gradient(135deg, #00897b, #004d40); border: 2px solid #b2dfdb;
+    color: #fff; font-size: 13px; font-weight: 900; pointer-events: auto; cursor: pointer;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.5); line-height: 1.15;
+  }
+  #run-center:active { transform: translate(-50%, -50%) scale(0.92); }
+  #run-center.sprint { background: linear-gradient(135deg, #fb8c00, #e65100); border-color: #ffe0b2; }
+  #run-center.locked { opacity: 0.4; }
 
   #start-btn-wrap { position: fixed; bottom: 20%; left: 50%; transform: translateX(-50%); z-index: 16; }
   #minimap {
@@ -365,7 +406,17 @@
   </div>
 </div>
 
-<div id="bottom-bar">WASD / 搖桿守備 ｜ Space 揮棒・撲接・撿球回傳・跑壘</div>
+<div id="run-pad">
+  <button class="run-base-btn" id="run-b2" data-rbase="2">二</button>
+  <button class="run-base-btn" id="run-b1" data-rbase="1">一</button>
+  <button class="run-base-btn" id="run-b4" data-rbase="4">本</button>
+  <button class="run-base-btn" id="run-b3" data-rbase="3">三</button>
+  <button class="run-ret-btn" id="run-ret-1" data-ret="1" title="回一壘">↘</button>
+  <button class="run-ret-btn" id="run-ret-2" data-ret="2" title="回二壘">↗</button>
+  <button class="run-ret-btn" id="run-ret-3" data-ret="3" title="回三壘">↖</button>
+  <button id="run-center">⚡盜壘</button>
+</div>
+  <div id="bottom-bar">WASD / 搖桿守備 ｜ Space 揮棒・撲接・撿球回傳・跑壘</div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script>
@@ -835,6 +886,16 @@ window.addEventListener('keydown', e => {
       else if (e.code === 'Digit4' || e.code === 'Numpad4') throwBallFromCF(4, false);
     }
   }
+  if (state.mode === 'game' && game.subPhase === 'LIVE_PLAY' && isPlayerOffense()) {
+    if (e.code === 'Digit1' || e.code === 'Numpad1') setRunnerTargetBase(1);
+    else if (e.code === 'Digit2' || e.code === 'Numpad2') setRunnerTargetBase(2);
+    else if (e.code === 'Digit3' || e.code === 'Numpad3') setRunnerTargetBase(3);
+    else if (e.code === 'Digit4' || e.code === 'Numpad4') setRunnerTargetBase(4);
+    else if (e.code === 'KeyR') {
+      const mr = getMyLiveRunner();
+      if (mr) triggerRunnerRetreat(Math.max(1, mr.baseFrom));
+    }
+  }
   if (state.phase === 'QUIZ_WAIT') {
     if (e.code === 'ArrowUp' || e.code === 'KeyW') submitQuiz('front');
     if (e.code === 'ArrowDown' || e.code === 'KeyS') submitQuiz('back');
@@ -889,6 +950,95 @@ document.querySelectorAll('.base-throw-btn').forEach(btn => {
 const btnSwing = document.getElementById('btn-swing');
 const btnSteal = document.getElementById('btn-steal');
 const btnRun = document.getElementById('btn-run');
+const runPad = document.getElementById('run-pad');
+const runCenterBtn = document.getElementById('run-center');
+
+document.querySelectorAll('.run-base-btn').forEach(btn => {
+  btn.addEventListener('pointerdown', e => {
+    e.preventDefault();
+    setRunnerTargetBase(parseInt(btn.dataset.rbase, 10));
+  });
+});
+document.querySelectorAll('.run-ret-btn').forEach(btn => {
+  btn.addEventListener('pointerdown', e => {
+    e.preventDefault();
+    triggerRunnerRetreat(parseInt(btn.dataset.ret, 10));
+  });
+});
+runCenterBtn.addEventListener('pointerdown', e => {
+  e.preventDefault();
+  if (state.mode !== 'game' || !isPlayerOffense()) return;
+  if (game.subPhase === 'OFF_SIM_WAIT' || game.subPhase === 'OFF_SIM_PITCH') {
+    attemptSteal();
+  } else if (game.subPhase === 'LIVE_PLAY') {
+    runCenterBtn.setPointerCapture(e.pointerId);
+    holdRun = true;
+  }
+});
+runCenterBtn.addEventListener('pointerup', () => { holdRun = false; });
+runCenterBtn.addEventListener('pointercancel', () => { holdRun = false; });
+
+function getMyLiveRunner() {
+  return liveRunners.find(r => r.isMe && !r.out && !r.scored);
+}
+
+function setRunnerTargetBase(tb) {
+  if (state.mode !== 'game' || game.subPhase !== 'LIVE_PLAY' || !isPlayerOffense() || !game.play) return;
+  const r = getMyLiveRunner();
+  if (!r || r.leftEarly) return;
+  r.manualControl = true;
+  r.leadGrace = 0;
+  r.targetBase = tb;
+  if (tb > r.baseFrom) {
+    r.stopped = false;
+    r.retreating = false;
+    if (r.baseTo <= r.baseFrom) r.baseTo = r.baseFrom + 1;
+    game.play.waitingEnd = false;
+    game.play.flyNoThrow = false;
+  } else if (tb <= r.baseFrom && r.progress > 0.01) {
+    r.retreating = true;
+  }
+  updateRunPadUI();
+}
+
+function triggerRunnerRetreat(retBase) {
+  if (state.mode !== 'game' || game.subPhase !== 'LIVE_PLAY' || !isPlayerOffense() || !game.play) return;
+  const r = getMyLiveRunner();
+  if (!r) return;
+  r.manualControl = true;
+  r.leadGrace = 0;
+  r.targetBase = retBase;
+  if (r.baseFrom > retBase || (r.baseFrom === retBase && r.progress > 0.01)) {
+    r.stopped = false;
+    r.retreating = true;
+  } else {
+    r.retreating = false;
+    r.stopped = true;
+  }
+  updateRunPadUI();
+}
+
+function updateRunPadUI() {
+  const showPrePitch = state.mode === 'game' && isPlayerOffense() && game.playerBase > 0
+    && (game.subPhase === 'OFF_SIM_WAIT' || game.subPhase === 'OFF_SIM_PITCH');
+  const meR = (state.mode === 'game' && game.subPhase === 'LIVE_PLAY' && isPlayerOffense()) ? getMyLiveRunner() : null;
+  runPad.style.display = (showPrePitch || meR) ? 'block' : 'none';
+  if (!showPrePitch && !meR) return;
+
+  runCenterBtn.className = '';
+  if (showPrePitch) {
+    const canSteal = game.playerBase < 3 && !game.bases[game.playerBase];
+    runCenterBtn.textContent = '⚡盜壘';
+    if (!canSteal) runCenterBtn.classList.add('locked');
+    document.querySelectorAll('.run-base-btn').forEach(b => b.classList.remove('target'));
+  } else if (meR) {
+    runCenterBtn.textContent = '💨衝刺';
+    runCenterBtn.classList.add('sprint');
+    document.querySelectorAll('.run-base-btn').forEach(b => {
+      b.classList.toggle('target', parseInt(b.dataset.rbase, 10) === meR.targetBase);
+    });
+  }
+}
 const actionBar = document.getElementById('action-bar');
 const ticker = document.getElementById('ticker');
 const bannerTitle = document.getElementById('banner-title');
@@ -1328,6 +1478,7 @@ function hideAllActionUI() {
   btnSteal.style.display = 'none';
   btnRun.style.display = 'none';
   touchControls.style.display = 'none';
+  runPad.style.display = 'none';
   callBtn.style.display = 'none';
   strikeZoneMesh.visible = false;
   landingRing.visible = false;
@@ -1388,10 +1539,8 @@ function enterCurrentRole() {
       camera.position.set(bPos.x, 1.65, bPos.z);
       lookTarget.set(0, 1.4, 10);
       camera.lookAt(lookTarget);
-      actionBar.style.display = 'flex';
-      const canSteal = game.playerBase < 3 && !game.bases[game.playerBase];
-      btnSteal.style.display = canSteal ? 'block' : 'none';
       game.subPhase = 'OFF_SIM_WAIT';
+      updateRunPadUI();
       game.timer = 1.5 / state.speed;
       setTicker(`你在${['', '一', '二', '三'][game.playerBase]}壘｜隊友 ${getMyOrder()} 棒打擊中`);
     } else if (getMyOrder() === game.playerOrder) {
@@ -1564,20 +1713,9 @@ function startLiveBallInPlay(ev, la, spray, spin, isMeBatting = false, tag = '')
     landingRing.visible = true;
   }
 
-  if (isPlayerOffense() && !isMeBatting && game.playerBase === 3 && game.outs < 2 && la > 20 && Math.hypot(sim.land.x, sim.land.z) > 62 && Math.hypot(sim.land.x, sim.land.z) < wallRadius) {
-    startInteractiveTagUp(spray);
-    return;
-  }
-
   spawnLiveRunners(isMeBatting);
   batterMesh.visible = false;
-
-  if (isPlayerOffense() && (game.playerBase > 0 || isMeBatting)) {
-    btnSteal.style.display = 'none';
-    btnRun.textContent = '🏃 按住衝刺（放開回壘）';
-    btnRun.style.display = 'block';
-    holdRun = false;
-  }
+  holdRun = false;
   game.play = {
     isMeBatting, ev, la, spray, tag,
     landed: false, fielded: false, fielderId: null, fielderRef: null,
@@ -1596,6 +1734,7 @@ function startLiveBallInPlay(ev, la, spray, spin, isMeBatting = false, tag = '')
     setTicker(la < 11 ? '滾地球打進場內！' : '高飛球打向空中！');
   }
   updateDiveBtnState();
+  updateRunPadUI();
 }
 
 function launchFoulFly(pInfo) {
@@ -2141,8 +2280,13 @@ function updateLivePlay(dt, now) {
     const leadHoldingBag = leadRunner && (leadRunner.stopped || leadRunner.retreating || (leadRunner.isMe && isPlayerOffense() && !holdRun && leadRunner.progress < 0.15));
     const blockedByLead = !!(leadHoldingBag && leadRunner.baseFrom <= nextTargetBase);
 
+    if (r.isMe && isPlayerOffense() && r.targetBase === undefined) {
+      r.targetBase = (r.baseFrom === 0 || forcedNow || game.outs === 2) ? (r.baseFrom + 1) : r.baseFrom;
+    }
+
     if (r.stopped) {
-      if (r.baseFrom < 4 && !pl.flyNoThrow && !blockedByLead && (pushedByTrailer || (r.isMe && isPlayerOffense() && holdRun) || (!r.isMe && !pl.flyCaught && !pl.fielded && !pl.throwActive && !isAirFly))) {
+      const meWantGo = r.isMe && isPlayerOffense() && r.targetBase > r.baseFrom;
+      if (r.baseFrom < 4 && !pl.flyNoThrow && !blockedByLead && (pushedByTrailer || meWantGo || (!r.isMe && !pl.flyCaught && !pl.fielded && !pl.throwActive && !isAirFly))) {
         r.stopped = false;
         r.baseTo = r.baseFrom + 1;
       } else {
@@ -2151,7 +2295,18 @@ function updateLivePlay(dt, now) {
     }
 
     // 玩家在一、二壘遇外野飛球：未按衝刺前先跑出約 1/3，視線鎖定在球上方便判斷
-    if (isAirFly && r.isMe && isPlayerOffense() && !r.isBatter && (r.baseFrom === 1 || r.baseFrom === 2) && state.meta && state.meta.land.z > 42 && !r.manualControl) {
+    if (isAirFly && r.isMe && isPlayerOffense() && !r.isBatter && r.baseFrom >= 1 && state.meta && state.meta.land.z > 42 && !r.manualControl) {
+      const movingOut = r.baseFrom < 3 && r.progress < 0.28;
+      if (movingOut) r.progress = Math.min(0.28, r.progress + 0.24 * dt);
+      const cur = new THREE.Vector3().lerpVectors(BASES[r.baseFrom % 4], BASES[r.baseTo % 4], r.progress);
+      cur.y = 1.65 + (movingOut ? Math.sin(now * 0.02) * 0.06 : 0);
+      camera.position.copy(cur);
+      lookTarget.lerp(ballMesh.position, 0.22);
+      camera.lookAt(lookTarget);
+      anyMoving = true;
+      return;
+    }
+    if (false) {
       if (holdRun) {
         r.manualControl = true;
         r.leadGrace = 0;
@@ -2211,7 +2366,7 @@ function updateLivePlay(dt, now) {
     }
     if (!pl.isHR && r.baseFrom >= 1 && !r.retreating && !forcedNow && !pushedByTrailer) {
       if (r.isMe && isPlayerOffense()) {
-        if (!holdRun && !(r.leadGrace > 0) && r.progress > 0.03) r.retreating = true;
+        if (r.targetBase <= r.baseFrom && r.progress > 0.03) r.retreating = true;
       } else if (!pl.flyCaught) {
         if (blockedByLead) {
           r.retreating = true;
@@ -2222,7 +2377,7 @@ function updateLivePlay(dt, now) {
     }
 
     if (r.retreating) {
-      if ((pushedByTrailer && !blockedByLead && !r.leftEarly) || (r.isMe && isPlayerOffense() && holdRun && !r.leftEarly)) {
+      if ((pushedByTrailer && !blockedByLead && !r.leftEarly) || (r.isMe && isPlayerOffense() && r.targetBase > r.baseFrom && !r.leftEarly)) {
         r.retreating = false;
       } else {
         r.progress -= r.speed * 1.25 * dt;
@@ -2261,10 +2416,10 @@ function updateLivePlay(dt, now) {
     }
 
     if (r.isMe && isPlayerOffense()) {
-      const twoOutAutoRun = game.outs === 2 && !pl.landed && !pl.fielded;
+      const wantFwd = r.baseFrom === 0 || forcedNow || r.targetBase > r.baseFrom;
       const spd = (pl.isHR
-        ? (holdRun ? 0.34 : 0.20)
-        : ((r.baseFrom === 0 || forcedNow || twoOutAutoRun || holdRun) ? 0.32 : 0.0)) * speedScale;
+        ? (holdRun ? 0.36 : 0.22)
+        : (wantFwd ? (holdRun ? 0.36 : 0.30) : 0.0)) * speedScale;
       r.progress += spd * dt;
       const cur = new THREE.Vector3().lerpVectors(BASES[r.baseFrom % 4], BASES[r.baseTo % 4], Math.min(1, r.progress));
       cur.y = 1.65 + (spd > 0 ? Math.sin(now * 0.022) * 0.08 : 0);
@@ -2297,7 +2452,7 @@ function updateLivePlay(dt, now) {
       r.progress = 0;
       if (r.baseFrom >= 4) {
         r.scored = true; r.mesh.visible = false;
-        if (r.isMe && isPlayerOffense()) btnRun.style.display = 'none';
+        if (r.isMe && isPlayerOffense()) updateRunPadUI();
         if (pl.landed || pl.isHR || (pl.flyCaught && game.outs + 1 < 3)) {
           addRuns(1);
           pl.runsAdded = (pl.runsAdded || 0) + 1;
@@ -2309,7 +2464,7 @@ function updateLivePlay(dt, now) {
         }
       } else {
         const ballLive = !pl.fielded && !pl.throwActive;
-        const canStretch = pl.isHR || (!pl.flyCaught && (pushedByTrailer || (r.isMe && holdRun) || (!r.isMe && ballLive && r.baseFrom < 4)));
+        const canStretch = pl.isHR || (r.isMe ? (r.targetBase > r.baseFrom) : (!pl.flyCaught && (pushedByTrailer || (ballLive && r.baseFrom < 4))));
         if (canStretch) r.baseTo = r.baseFrom + 1;
         else { r.stopped = true; r.mesh.position.copy(BASES[r.baseFrom]); }
       }
@@ -2923,7 +3078,7 @@ function swingBat() {
 function attemptSteal() {
   if (game.subPhase !== 'OFF_SIM_WAIT' && game.subPhase !== 'OFF_SIM_PITCH') return;
   if (game.playerBase <= 0 || game.playerBase >= 3 || game.bases[game.playerBase]) return;
-  btnSteal.style.display = 'none';
+  runPad.style.display = 'none';
   game.runProgress = 0;
   game.runTargetBase = game.playerBase + 1;
   game.subPhase = 'BASE_STEAL';
