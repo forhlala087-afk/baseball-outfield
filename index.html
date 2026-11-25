@@ -1641,8 +1641,8 @@ function launchSimPitch(isDefense) {
   else game.simResult = 'IN_PLAY';
 
   if (!game.steal && (!isPlayerOffense() || game.playerBase === 0)) {
-    if (game.bases[0] && !game.bases[1] && Math.random() < 0.14) startStealRun(1, false);
-    else if (game.bases[1] && !game.bases[2] && Math.random() < 0.05) startStealRun(2, false);
+    if (game.bases[0] && !game.bases[1] && Math.random() < 0.045) startStealRun(1, false);
+    else if (game.bases[1] && !game.bases[2] && Math.random() < 0.015) startStealRun(2, false);
   }
 }
 
@@ -3196,7 +3196,7 @@ function startStealRun(fromBase, isMe) {
   game.steal = {
     fromBase, toBase: fromBase + 1, isMe, mesh,
     prog: fromBase === 1 ? 0.20 : 0.16,
-    speed: fromBase === 1 ? 0.34 : 0.27,
+    speed: fromBase === 1 ? (0.49 + Math.random() * 0.10) : (0.51 + Math.random() * 0.10),
     stage: 'PITCHING',
     throwFrom: null, throwTo: null, throwT: 0, throwDur: fromBase === 1 ? 0.66 : 0.50,
     tagTimer: 0
@@ -3225,7 +3225,7 @@ function startPickoff(jumpedEarly = false) {
     throwFrom: new THREE.Vector3(0, 1.7, 18.44),
     throwTo: target1B,
     runnerProg: jumpedEarly ? 0.26 : 0.20,
-    runnerState: jumpedEarly ? 'BREAK' : (isMeRunner ? 'LEAD' : (Math.random() < 0.22 && !game.bases[1] ? 'BREAK' : 'BACK')),
+    runnerState: jumpedEarly ? 'BREAK' : (isMeRunner ? 'LEAD' : (Math.random() < 0.08 && !game.bases[1] ? 'BREAK' : 'BACK')),
     runnerMesh: rMesh,
     isMeRunner, isMe1B,
     tagTimer: 0, holdTimer: 0
@@ -3694,7 +3694,7 @@ function animate(now) {
       }
       game.timer -= dt;
       if (game.timer <= 0) {
-        if (game.bases[0] && Math.random() < 0.18) startPickoff(false);
+        if (game.bases[0] && Math.random() < 0.06) startPickoff(false);
         else launchSimPitch(game.subPhase === 'DEF_WAIT');
       }
     } else if (game.subPhase === 'DEF_PITCH' || game.subPhase === 'OFF_SIM_PITCH') {
@@ -3713,7 +3713,7 @@ function animate(now) {
       camera.lookAt(lookTarget);
       if (game.steal && game.steal.stage === 'PITCHING') {
         const st = game.steal;
-        st.prog = Math.min(1, st.prog + st.speed * dt);
+        st.prog = Math.min(1, st.prog + st.speed * dt * state.speed);
         const rp = new THREE.Vector3().lerpVectors(BASES[st.fromBase], BASES[st.toBase], st.prog);
         if (st.isMe) {
           camera.position.set(rp.x, 1.65 + Math.sin(now * 0.022) * 0.08, rp.z);
