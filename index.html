@@ -1773,7 +1773,7 @@ function spawnLiveRunners(isMeBatting) {
       if (isMe) m.visible = false;
       liveRunners.push({
         mesh: m, startBase: i + 1, baseFrom: i + 1, baseTo: i + 2, progress: 0,
-        speed: 0.25 + Math.random() * 0.03, isBatter: false, isMe,
+        speed: 0.29 + Math.random() * 0.03, isBatter: false, isMe,
         isForced, leftEarly: false, out: false, scored: false, stopped: false, retreating: false
       });
     }
@@ -2401,7 +2401,7 @@ function updateLivePlay(dt, now) {
     if (r.out || r.scored) return;
 
     if (r.startBase === undefined) r.startBase = r.baseFrom;
-    const isAirFly = !pl.isHR && game.outs < 2 && !pl.landed && !pl.flyCaught && pl.la > 8;
+    const isAirFly = !pl.isHR && game.outs < 2 && !pl.landed && !pl.flyCaught && pl.la > 13;
     const forcedNow = !pl.flyCaught && r.isForced && (pl.landed || game.outs === 2);
 
     // 檢查後面有沒有跑者正在往自己原本的壘包衝（被後位跑者推著走）
@@ -2463,8 +2463,9 @@ function updateLivePlay(dt, now) {
     // 未滿兩出局的空中飛球／平飛球：夠深遠想 Tag-up 的二三壘跑者留在壘包等接殺，其餘先跑出去約 1/3 判斷
     if (isAirFly && !r.isBatter && !r.isMe) {
       const wantTagUp = r.baseFrom >= 2 && pl.la >= 20 && state.meta && state.meta.land.z >= 82;
-      if (!wantTagUp && r.progress < 0.33) {
-        r.progress = Math.min(0.33, r.progress + r.speed * 0.85 * dt);
+      const holdFrac = r.baseFrom === 1 ? 0.50 : 0.36;
+      if (!wantTagUp && r.progress < holdFrac) {
+        r.progress = Math.min(holdFrac, r.progress + r.speed * 0.9 * dt);
         const cur = new THREE.Vector3().lerpVectors(BASES[r.baseFrom % 4], BASES[r.baseTo % 4], r.progress);
         cur.y = Math.abs(Math.sin(now * 0.018)) * 0.14;
         r.mesh.position.copy(cur);
@@ -2862,7 +2863,7 @@ function handleAIFieldGroundBall(f) {
       setTicker(`${f.id} 傳${['本', '一', '二', '三', '本'][targetBase]}壘！`);
     }
   } else {
-    pl.throwDelay = 0.44;
+    pl.throwDelay = 0.62;
     const targetBase = getBestThrowTargetBase(false);
     const bName = ['本', '一', '二', '三', '本'][targetBase];
     const prog = getRunnerProgressTo(targetBase);
