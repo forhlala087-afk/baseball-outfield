@@ -810,11 +810,13 @@ window.addEventListener('keydown', e => {
       else if (state.phase === 'IN_FLIGHT' && state.mode === 'chase') triggerDive();
     }
   }
-  if (state.mode === 'game' && game.subPhase === 'LIVE_PLAY' && isPlayerDefense() && player.hasBall) {
-    if (e.code === 'Digit1' || e.code === 'Numpad1') throwBallFromCF(1, false);
-    else if (e.code === 'Digit2' || e.code === 'Numpad2') throwBallFromCF(2, false);
-    else if (e.code === 'Digit3' || e.code === 'Numpad3') throwBallFromCF(3, false);
-    else if (e.code === 'Digit4' || e.code === 'Numpad4') throwBallFromCF(4, false);
+  if (state.mode === 'game' && game.subPhase === 'LIVE_PLAY' && isPlayerFielding()) {
+    if ((e.code === 'Digit1' || e.code === 'Numpad1') && (player.hasBall || game.playerPos === '1B')) throwBallFromCF(1, false);
+    else if (player.hasBall) {
+      if (e.code === 'Digit2' || e.code === 'Numpad2') throwBallFromCF(2, false);
+      else if (e.code === 'Digit3' || e.code === 'Numpad3') throwBallFromCF(3, false);
+      else if (e.code === 'Digit4' || e.code === 'Numpad4') throwBallFromCF(4, false);
+    }
   }
   if (state.phase === 'QUIZ_WAIT') {
     if (e.code === 'ArrowUp' || e.code === 'KeyW') submitQuiz('front');
@@ -855,8 +857,9 @@ diveBtn.addEventListener('pointerdown', e => {
 document.querySelectorAll('.base-throw-btn').forEach(btn => {
   btn.addEventListener('pointerdown', e => {
     e.preventDefault();
-    if (state.mode === 'game' && game.subPhase === 'LIVE_PLAY' && isPlayerDefense() && player.hasBall) {
-      throwBallFromCF(parseInt(btn.dataset.base, 10), false);
+    const base = parseInt(btn.dataset.base, 10);
+    if (state.mode === 'game' && game.subPhase === 'LIVE_PLAY' && isPlayerFielding() && (player.hasBall || (base === 1 && game.playerPos === '1B'))) {
+      throwBallFromCF(base, false);
     }
   });
 });
@@ -892,7 +895,8 @@ function updateDiveBtnState() {
   const showBaseBtns = state.mode === 'game' && isPlayerFielding();
   document.querySelectorAll('.base-throw-btn').forEach(b => {
     b.style.display = showBaseBtns ? 'flex' : 'none';
-    b.classList.toggle('ready', showBaseBtns && player.hasBall && game.subPhase === 'LIVE_PLAY');
+    const is1BReady = b.dataset.base === '1' && game.playerPos === '1B';
+    b.classList.toggle('ready', showBaseBtns && game.subPhase === 'LIVE_PLAY' && (player.hasBall || is1BReady));
   });
   if (state.mode !== 'game' || game.subPhase !== 'LIVE_PLAY' || !isPlayerDefense() || !game.play) {
     diveBtn.textContent = '撲接';
@@ -1121,18 +1125,28 @@ function getBaseCoverFielder(tb, excludeId = '') {
 }
 
 function throwBallFromCF(manualBase = 0, forceCutoff = false) {
-  if (!player.hasBall || !game.play) return;
+  if (!game.play) return;
   const pl = game.play;
   if (!forceCutoff && manualBase === 1 && game.playerPos === '1B') {
     const cover1B = getBaseCoverFielder(1, 'PLAYER');
     const myDist1B = Math.hypot(player.pos.x - BASES[1].x, player.pos.z - BASES[1].z);
     const coverDist1B = cover1B ? Math.hypot(cover1B.pos.x - BASES[1].x, cover1B.pos.z - BASES[1].z) : Infinity;
     const isCovering1B = cover1B && (cover1B.id === 'P' || (cover1B.id === '2B' && pl.tag === '軟弱滾地') || coverDist1B < 8);
+    if (!player.hasBall) {
+      if (!isCovering1B || myDist1B <= coverDist1B) {
+        pl.autoRun1B = true;
+      }
+      return;
+    }
     if (!isCovering1B || myDist1B <= coverDist1B) {
-      setBanner('直接踩一壘！', '');
+      pl.autoRun1B = true;
+      pl.waitingEnd = false;
+      pl.endCooldown = 0;
       return;
     }
   }
+  if (!player.hasBall) return;
+  pl.autoRun1B = false;
   player.hasBall = false;
   pl.waitingEnd = false;
   pl.endCooldown = 0;
@@ -1857,6 +1871,7 @@ function updateLivePlay(dt, now) {
         if (Math.hypot(player.pos.x - bPos.x, player.pos.z - bPos.z) < 1.35) {
           AudioFX.glovePop();
           pl.playerCoverBase = 0;
+          pl.autoRun1B = false;
           if (stepBase === 1) pl.selfStepped1B = true;
           pl.throwTargetBase = stepBase;
           pl.throwTargetFielder = { id: `${game.playerPos}(你)`, pos: player.pos, isPlayer: true, steppedBag: true };
@@ -2102,40 +2117,21 @@ function updateLivePlay(dt, now) {
     let aim = new THREE.Vector3(0, 1.4, 22);
     if (pl.pendingFromPlayer && pl.pendingThrowTargetPos) {
       aim.copy(pl.pendingThrowTargetPos);
-    } else if (pl.playerCoverBase) {
+    } else if (pl.playerCoverBase && game.playerPos !== '1B') {
       const b = BASES[pl.playerCoverBase % 4];
       aim.set(b.x, 1.1, b.z);
     } else if (POS_MAP[game.playerPos].isIF) {
       const tb = getBestThrowTargetBase(true);
-      const tPos = BASES[tb % 4];
-      if (game.playerPos === '1B' && tb === 1 && !pl.selfStepped1B && !pl.flyCaught && Math.hypot(player.pos.x - BASES[1].x, player.pos.z - BASES[1].z) > 1.35) {
-        aim.set(BASES[1].x, 1.0, BASES[1].z);
-      } else if (Math.hypot(player.pos.x - tPos.x, player.pos.z - tPos.z) > 3.5) aim.set(tPos.x, 1.3, tPos.z);
-      else if (Math.hypot(player.pos.x - BASES[1].x, player.pos.z - BASES[1].z) > 3.5) aim.set(BASES[1].x, 1.3, BASES[1].z);
-      else aim.set(0, 1.3, 18.44);
+      if (game.playerPos === '1B' && tb === 1) {
+        aim.set(0, 1.35, 18.44);
+      } else {
+        const tPos = BASES[tb % 4];
+        if (Math.hypot(player.pos.x - tPos.x, player.pos.z - tPos.z) > 3.5) aim.set(tPos.x, 1.3, tPos.z);
+        else if (Math.hypot(player.pos.x - BASES[1].x, player.pos.z - BASES[1].z) > 3.5) aim.set(BASES[1].x, 1.3, BASES[1].z);
+        else aim.set(0, 1.3, 18.44);
+      }
     }
     lookTarget.lerp(aim, 0.16);
-    camera.lookAt(lookTarget);
-  } else if (isPlayerFielding() && game.playerPos === '1B' && pl.la < 12 && pl.tag !== '車布邊' && (pl.spray >= -16 || (pl.fielded && pl.fielderId !== '1B')) && (pl.fielded || state.ballPos.z <= 42)) {
-    const b1 = BASES[1];
-    const dist1B = Math.hypot(player.pos.x - b1.x, player.pos.z - b1.z);
-    if (dist1B <= 1.6) pl.reached1B = true;
-    else if (dist1B > 3.2) pl.reached1B = false;
-    const incomingTo1B = pl.throwActive && pl.throwTargetBase === 1;
-    const focus = (!pl.throwActive && pl.fielderRef && pl.fielderRef.pos)
-      ? new THREE.Vector3(pl.fielderRef.pos.x, 1.35, pl.fielderRef.pos.z)
-      : ballMesh.position;
-    if (pl.elapsed < 0.45 && !pl.fielded) {
-      lookTarget.lerp(ballMesh.position, 0.22);
-    } else if (!pl.reached1B && !incomingTo1B) {
-      const to1B = new THREE.Vector3(b1.x - player.pos.x, 0, b1.z - player.pos.z).normalize();
-      const toHome = new THREE.Vector3(-player.pos.x, 0, -player.pos.z).normalize();
-      const assistDir = to1B.multiplyScalar(0.8).addScaledVector(toHome, 0.2).normalize();
-      const assistAim = new THREE.Vector3(player.pos.x + assistDir.x * 10, 1.25, player.pos.z + assistDir.z * 10);
-      lookTarget.lerp(assistAim, 0.1);
-    } else {
-      lookTarget.lerp(focus, 0.18);
-    }
     camera.lookAt(lookTarget);
   } else if (isPlayerDefense() || !(isPlayerOffense() && (game.playerBase > 0 || pl.isMeBatting))) {
     lookTarget.lerp(ballMesh.position, 0.2);
@@ -2894,6 +2890,7 @@ function drawMinimap() {
 
 function updateCFMovement(dt, now) {
   if (player.diving) {
+    if (game.play) game.play.autoRun1B = false;
     player.diveTimer -= dt;
     const speed = 10.6 * Math.max(player.diveTimer / 0.52, 0.15);
     player.pos.addScaledVector(player.diveDir, speed * dt);
@@ -2901,7 +2898,26 @@ function updateCFMovement(dt, now) {
     if (player.diveTimer <= 0) { player.diving = false; player.pos.y = 1.7; }
   } else {
     const input = getMoveInput();
-    const maxSpeed = input.z > 0.3 ? 7.8 : 8.8;
+    const pl = (state.mode === 'game' && game.subPhase === 'LIVE_PLAY') ? game.play : null;
+    let autoRunning = false;
+    if (pl && pl.autoRun1B) {
+      if (input.lengthSq() > 0.05) {
+        pl.autoRun1B = false;
+      } else {
+        const dx = BASES[1].x - player.pos.x, dz = BASES[1].z - player.pos.z;
+        const d = Math.hypot(dx, dz);
+        if (d <= 0.35) {
+          pl.autoRun1B = false;
+          player.pos.x = BASES[1].x;
+          player.pos.z = BASES[1].z;
+          player.vel.set(0, 0, 0);
+        } else {
+          input.set(dx / d, 0, dz / d);
+          autoRunning = true;
+        }
+      }
+    }
+    const maxSpeed = autoRunning ? 8.8 : (input.z > 0.3 ? 7.8 : 8.8);
     player.vel.lerp(input.multiplyScalar(maxSpeed), Math.min(1, dt * 8.5));
     player.pos.addScaledVector(player.vel, dt);
     player.pos.y = 1.7 + Math.sin(now * 0.018) * (player.vel.length() * 0.012);
