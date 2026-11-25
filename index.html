@@ -257,6 +257,12 @@
   #run-ret-1 { top: 24px; right: 24px; }
   #run-ret-2 { top: 24px; left: 24px; }
   #run-ret-3 { bottom: 24px; left: 24px; }
+  .run-ret-btn.alert {
+    background: #e53935; border-color: #ffeb3b;
+    box-shadow: 0 0 14px #ffeb3b;
+    animation: pulseRet 0.35s infinite alternate;
+  }
+  @keyframes pulseRet { from { transform: scale(1); } to { transform: scale(1.22); } }
   #run-center {
     position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
     width: 62px; height: 62px; border-radius: 50%;
@@ -675,10 +681,14 @@ function resetFielders(hideCF = false, teamColor = 0x1565c0) {
   catcherMesh.userData.bodyMat.color.setHex(teamColor);
   batterMesh.userData.bodyMat.color.setHex(teamColor === 0x1565c0 ? 0xc62828 : 0x1565c0);
   fielders.forEach(f => {
-    f.pos.copy(f.home);
+    if (f.id === '1B' && state.mode === 'game' && game.bases[0]) {
+      f.pos.set(-18.7, 0, 20.6);
+    } else {
+      f.pos.copy(f.home);
+    }
     f.stunTimer = 0;
     f.mesh.rotation.x = 0;
-    f.mesh.position.copy(f.home);
+    f.mesh.position.copy(f.pos);
     f.mesh.userData.bodyMat.color.setHex(teamColor);
     const hideId = state.mode === 'game' ? game.playerPos : 'CF';
     f.mesh.visible = !(hideCF && f.id === hideId);
@@ -703,12 +713,19 @@ function isPlayerOffense() { return !isPlayerDefense(); }
 function isPlayerFielding() { return isPlayerDefense() && game.playerPos !== 'DH'; }
 function isPlayerIF() { return isPlayerFielding() && POS_MAP[game.playerPos] && POS_MAP[game.playerPos].isIF; }
 
+function getLeadPos(baseIdx, frac) {
+  const f = frac !== undefined ? frac : (baseIdx === 1 ? 0.20 : 0.16);
+  return new THREE.Vector3().lerpVectors(BASES[baseIdx], BASES[(baseIdx + 1) % 4], f);
+}
+
 function syncStaticRunners() {
   const color = isPlayerDefense() ? 0xc62828 : 0x1565c0;
   for (let i = 0; i < 3; i++) {
     const isMeHere = isPlayerOffense() && game.playerBase === i + 1;
-    staticRunners[i].visible = game.bases[i] && !isMeHere && liveRunners.length === 0;
+    staticRunners[i].visible = game.bases[i] && !isMeHere && liveRunners.length === 0 && !game.pickoff && !game.steal;
     staticRunners[i].userData.bodyMat.color.setHex(color);
+    const lp = getLeadPos(i + 1);
+    staticRunners[i].position.set(lp.x, 0, lp.z);
   }
 }
 
@@ -791,6 +808,9 @@ const POS_MAP = {
 };
 const START_POS = POS_MAP.CF.pos.clone();
 function getPlayerStartPos() {
+  if (state.mode === 'game' && game.playerPos === '1B' && game.bases[0]) {
+    return new THREE.Vector3(-18.7, 1.7, 20.6);
+  }
   return (state.mode === 'game' && POS_MAP[game.playerPos]) ? POS_MAP[game.playerPos].pos : START_POS;
 }
 function getBatterCamPos() {
@@ -851,6 +871,8 @@ const game = {
   pitchIsStrike: true,
   pitchSwung: false,
   simResult: null,
+  pickoff: null,
+  steal: null,
   play: null,
   runProgress: 0,
   runTargetBase: 0,
@@ -870,12 +892,17 @@ window.addEventListener('keydown', e => {
       if (!game.active) startGameMode();
       else if (game.subPhase === 'BAT_PITCH') swingBat();
       else if (game.subPhase === 'LIVE_PLAY' && isPlayerFielding()) handleDefenseAction();
+      else if (game.subPhase === 'PICKOFF' && isPlayerFielding()) handlePickoff1BAction(0);
       else if (game.subPhase === 'LIVE_PLAY' && isPlayerOffense() && (game.playerBase > 0 || (game.play && game.play.isMeBatting))) holdRun = true;
       else if (game.subPhase === 'BASE_TAGUP') holdRun = true;
     } else {
       if (state.phase === 'IDLE' || state.phase === 'RESULT') startPracticePitch();
       else if (state.phase === 'IN_FLIGHT' && state.mode === 'chase') triggerDive();
     }
+  }
+  if (state.mode === 'game' && game.subPhase === 'PICKOFF') {
+    if (isPlayerFielding() && (e.code === 'Digit2' || e.code === 'Numpad2')) handlePickoff1BAction(2);
+    else if (isPlayerOffense() && e.code === 'KeyR') triggerRunnerRetreat(1);
   }
   if (state.mode === 'game' && game.subPhase === 'LIVE_PLAY' && isPlayerFielding()) {
     if (e.code === 'KeyC') callMyBall();
@@ -936,6 +963,7 @@ diveBtn.addEventListener('pointerdown', e => {
   e.preventDefault();
   if (state.mode === 'chase' && state.phase === 'IN_FLIGHT') triggerDive();
   else if (state.mode === 'game' && game.subPhase === 'LIVE_PLAY' && isPlayerDefense()) handleDefenseAction();
+  else if (state.mode === 'game' && game.subPhase === 'PICKOFF' && isPlayerFielding()) handlePickoff1BAction(0);
 });
 document.querySelectorAll('.base-throw-btn').forEach(btn => {
   btn.addEventListener('pointerdown', e => {
@@ -943,6 +971,8 @@ document.querySelectorAll('.base-throw-btn').forEach(btn => {
     const base = parseInt(btn.dataset.base, 10);
     if (state.mode === 'game' && game.subPhase === 'LIVE_PLAY' && isPlayerFielding() && (player.hasBall || (base === 1 && game.playerPos === '1B'))) {
       throwBallFromCF(base, false);
+    } else if (state.mode === 'game' && game.subPhase === 'PICKOFF' && isPlayerFielding() && base === 2) {
+      handlePickoff1BAction(2);
     }
   });
 });
@@ -1002,6 +1032,15 @@ function setRunnerTargetBase(tb) {
 }
 
 function triggerRunnerRetreat(retBase) {
+  if (state.mode === 'game' && game.subPhase === 'PICKOFF' && isPlayerOffense() && game.pickoff && retBase === 1) {
+    if (game.pickoff.runnerState !== 'BACK') {
+      game.pickoff.runnerState = 'BACK';
+      document.getElementById('run-ret-1').classList.remove('alert');
+      AudioFX.tone(420, 0.08);
+      setBanner('撲回一壘！', '');
+    }
+    return;
+  }
   if (state.mode !== 'game' || game.subPhase !== 'LIVE_PLAY' || !isPlayerOffense() || !game.play) return;
   const r = getMyLiveRunner();
   if (!r) return;
@@ -1020,7 +1059,7 @@ function triggerRunnerRetreat(retBase) {
 
 function updateRunPadUI() {
   const showPrePitch = state.mode === 'game' && isPlayerOffense() && game.playerBase > 0
-    && (game.subPhase === 'OFF_SIM_WAIT' || game.subPhase === 'OFF_SIM_PITCH');
+    && (game.subPhase === 'OFF_SIM_WAIT' || game.subPhase === 'OFF_SIM_PITCH' || game.subPhase === 'PICKOFF');
   const meR = (state.mode === 'game' && game.subPhase === 'LIVE_PLAY' && isPlayerOffense()) ? getMyLiveRunner() : null;
   runPad.style.display = (showPrePitch || meR) ? 'block' : 'none';
   if (!showPrePitch && !meR) return;
@@ -1087,6 +1126,12 @@ function updateDiveBtnState() {
   } else if (showBaseBtns) {
     callBtn.textContent = '🔒 喊聲';
     callBtn.classList.add('locked');
+  }
+  if (state.mode === 'game' && game.subPhase === 'PICKOFF' && isPlayerFielding() && game.pickoff && game.pickoff.stage === 'HOLD_1B') {
+    diveBtn.textContent = '回傳\n投手';
+    diveBtn.classList.add('pickup');
+    document.getElementById('btn-th-2').classList.add('ready');
+    return;
   }
   if (state.mode !== 'game' || game.subPhase !== 'LIVE_PLAY' || !isPlayerDefense() || !game.play) {
     diveBtn.textContent = '撲接';
@@ -1482,6 +1527,7 @@ function hideAllActionUI() {
   callBtn.style.display = 'none';
   strikeZoneMesh.visible = false;
   landingRing.visible = false;
+  document.getElementById('run-ret-1').classList.remove('alert');
 }
 
 function startGameMode() {
@@ -1511,6 +1557,9 @@ function enterCurrentRole() {
   hideAllActionUI();
   clearLiveRunners();
   game.play = null;
+  game.pickoff = null;
+  game.steal = null;
+  document.getElementById('run-ret-1').classList.remove('alert');
   player.hasBall = false;
   ballMesh.visible = false; ballShadow.visible = false;
   batterMesh.visible = true;
@@ -1535,9 +1584,9 @@ function enterCurrentRole() {
   } else {
     resetFielders(false, 0xc62828);
     if (game.playerBase > 0) {
-      const bPos = BASES[game.playerBase];
+      const bPos = getLeadPos(game.playerBase);
       camera.position.set(bPos.x, 1.65, bPos.z);
-      lookTarget.set(0, 1.4, 10);
+      lookTarget.set(0, 1.4, 18.44);
       camera.lookAt(lookTarget);
       game.subPhase = 'OFF_SIM_WAIT';
       updateRunPadUI();
@@ -1590,6 +1639,11 @@ function launchSimPitch(isDefense) {
   else if (r < 0.62) game.simResult = 'FOUL_FLY';
   else if (r < 0.69) game.simResult = 'FOUL_GROUND';
   else game.simResult = 'IN_PLAY';
+
+  if (!game.steal && (!isPlayerOffense() || game.playerBase === 0)) {
+    if (game.bases[0] && !game.bases[1] && Math.random() < 0.14) startStealRun(1, false);
+    else if (game.bases[1] && !game.bases[2] && Math.random() < 0.05) startStealRun(2, false);
+  }
 }
 
 function generateBattedBallParams() {
@@ -1760,27 +1814,53 @@ function launchFoulFly(pInfo) {
   game.timer = 1.4 / state.speed;
 }
 
+function startCatcherStealThrow() {
+  const st = game.steal;
+  if (!st) return;
+  st.stage = 'THROW';
+  st.throwT = 0;
+  st.throwFrom = new THREE.Vector3(0, 1.35, -1.2);
+  st.throwTo = BASES[st.toBase].clone().setY(1.25);
+  ballMesh.visible = true;
+  ballShadow.visible = true;
+  game.subPhase = 'STEAL_THROW';
+  setTicker(`捕手長傳${['', '', '二', '三'][st.toBase]}壘狙殺盜壘！`);
+  AudioFX.tone(520, 0.08);
+}
+
 function resolveSimPitch(isDefense) {
   const res = game.simResult;
   const pInfo = `${game.pitchType.name} ${game.pitchKmh}km/h｜`;
+
+  if (game.steal && (res === 'FOUL_FLY' || res === 'FOUL_GROUND' || res === 'IN_PLAY')) {
+    if (game.steal.mesh) scene.remove(game.steal.mesh);
+    game.steal = null;
+  }
 
   if (res === 'BALL') {
     AudioFX.glovePop();
     game.balls++;
     if (game.balls >= 4) {
+      if (game.steal) { if (game.steal.mesh) scene.remove(game.steal.mesh); game.steal = null; }
       setTicker(`${pInfo}四壞球保送！打者上一壘`);
       applyWalk(false); nextBatter();
-    } else setTicker(`${pInfo}壞球（${game.balls}壞${game.strikes}好）`);
-    enterAfterPause(1.0);
+      enterAfterPause(1.0);
+    } else {
+      setTicker(`${pInfo}壞球（${game.balls}壞${game.strikes}好）`);
+      if (game.steal) { startCatcherStealThrow(); updateGameUI(); return; }
+      enterAfterPause(1.0);
+    }
   } else if (res === 'STRIKE_LOOK' || res === 'STRIKE_SWING') {
     AudioFX.glovePop();
     game.strikes++;
     const label = res === 'STRIKE_LOOK' ? '好球進壘' : '揮棒落空';
     if (game.strikes >= 3) {
+      if (game.steal) { if (game.steal.mesh) scene.remove(game.steal.mesh); game.steal = null; }
       AudioFX.tone(320, 0.2);
       if (!addOut(`${pInfo}${label}！三振出局！`)) { nextBatter(); enterAfterPause(1.1); }
     } else {
       setTicker(`${pInfo}${label}（${game.balls}壞${game.strikes}好）`);
+      if (game.steal) { startCatcherStealThrow(); updateGameUI(); return; }
       enterAfterPause(0.95);
     }
   } else if (res === 'FOUL_FLY') {
@@ -2241,6 +2321,12 @@ function updateLivePlay(dt, now) {
       resolveThrowArrival();
       return;
     }
+  } else if (pl.tagDelay > 0) {
+    pl.tagDelay -= dt;
+    if (pl.tagDelay <= 0) {
+      resolveThrowArrival();
+      return;
+    }
   } else if (pl.throwActive) {
     if (pl.throwTargetFielder && pl.throwTargetFielder.pos) {
       pl.throwTo.set(pl.throwTargetFielder.pos.x, 1.35, pl.throwTargetFielder.pos.z);
@@ -2252,7 +2338,16 @@ function updateLivePlay(dt, now) {
     ballShadow.position.set(ballMesh.position.x, 0.07, ballMesh.position.z);
     if (p >= 1) {
       AudioFX.glovePop();
-      resolveThrowArrival();
+      const tb = pl.throwTargetBase;
+      const needTagDelay = !pl.relayActive && tb >= 2 && liveRunners.some(r =>
+        !r.out && !r.scored && !r.isForced && !r.leftEarly && r.baseTo === tb && r.progress > 0.45 && r.progress < 0.99
+      );
+      if (needTagDelay) {
+        pl.throwActive = false;
+        pl.tagDelay = 0.28;
+      } else {
+        resolveThrowArrival();
+      }
       return;
     }
   } else if (pl.fielded && pl.fielderRef && pl.fielderRef.pos) {
@@ -2527,7 +2622,7 @@ function updateLivePlay(dt, now) {
   const totalOutsNow = game.outs + liveRunners.filter(r => r.out).length;
   if (pl.elapsed > 18) {
     finalizeLivePlay(pl.lastGotOut, pl.lastOutBase || 1);
-  } else if (pl.fielded && !pl.throwActive && pl.throwDelay <= 0 && !pl.selfCoverBase && !pl.playerCoverBase) {
+  } else if (pl.fielded && !pl.throwActive && pl.throwDelay <= 0 && !(pl.tagDelay > 0) && !pl.selfCoverBase && !pl.playerCoverBase) {
     if (totalOutsNow >= 3) {
       finalizeLivePlay(pl.lastGotOut, pl.lastOutBase || 1);
     } else if (!anyMoving) {
@@ -3078,103 +3173,298 @@ function swingBat() {
 function attemptSteal() {
   if (game.subPhase !== 'OFF_SIM_WAIT' && game.subPhase !== 'OFF_SIM_PITCH') return;
   if (game.playerBase <= 0 || game.playerBase >= 3 || game.bases[game.playerBase]) return;
-  runPad.style.display = 'none';
-  game.runProgress = 0;
-  game.runTargetBase = game.playerBase + 1;
-  game.subPhase = 'BASE_STEAL';
-  setTicker(`⚡ 發動盜壘！衝向${['', '', '二', '三'][game.runTargetBase]}壘！`);
+  if (game.steal) return;
+
+  if (game.subPhase === 'OFF_SIM_WAIT') {
+    if (game.playerBase === 1 && Math.random() < 0.72) {
+      startPickoff(true);
+      return;
+    }
+    startStealRun(game.playerBase, true);
+    launchSimPitch(false);
+    return;
+  }
+  startStealRun(game.playerBase, true);
+}
+
+function startStealRun(fromBase, isMe) {
+  const color = isPlayerDefense() ? 0xc62828 : 0x1565c0;
+  let mesh = null;
+  if (!isMe) {
+    mesh = createPlayerSilhouette(BASES[fromBase].x, BASES[fromBase].z, color);
+  }
+  game.steal = {
+    fromBase, toBase: fromBase + 1, isMe, mesh,
+    prog: fromBase === 1 ? 0.20 : 0.16,
+    speed: fromBase === 1 ? 0.34 : 0.27,
+    stage: 'PITCHING',
+    throwFrom: null, throwTo: null, throwT: 0, throwDur: fromBase === 1 ? 0.66 : 0.50,
+    tagTimer: 0
+  };
+  syncStaticRunners();
+  if (isMe) {
+    runPad.style.display = 'none';
+    setTicker(`⚡ 啟動盜壘！衝向${['', '', '二', '三'][fromBase + 1]}壘！`);
+  } else {
+    setTicker(`⚡ 對手發動盜壘！衝向${['', '', '二', '三'][fromBase + 1]}壘！`);
+  }
   AudioFX.tone(540, 0.1);
 }
 
-function startInteractiveTagUp(spray) {
-  game.subPhase = 'BASE_TAGUP';
-  game.tagBallCaught = false;
-  game.tagThrowTimer = 2.05;
-  game.runProgress = 0;
-  holdRun = false;
-  launchVisualBall(39, 36, spray, 0.95);
-  btnSteal.style.display = 'none';
-  btnRun.textContent = '🏃 按住衝刺（等接殺起跑）';
-  btnRun.style.display = 'block';
-  setBanner('高飛犧牲打機會！', '轉頭看球！等外野手「接殺瞬間」再按住衝刺！');
-  setTicker('隊友擊出外野高飛球！你在三壘準備 Tag-up！');
+function startPickoff(jumpedEarly = false) {
+  const isMeRunner = isPlayerOffense() && game.playerBase === 1;
+  const isMe1B = isPlayerFielding() && game.playerPos === '1B';
+  const color = isPlayerDefense() ? 0xc62828 : 0x1565c0;
+  const rMesh = isMeRunner ? null : createPlayerSilhouette(BASES[1].x, BASES[1].z, color);
+  const f1B = getFielderById('1B');
+  const target1B = isMe1B ? player.pos.clone().setY(1.35) : (f1B ? f1B.pos.clone().setY(1.35) : BASES[1].clone().setY(1.35));
+
+  game.pickoff = {
+    stage: 'TO_1B',
+    t: 0, dur: 0.42,
+    throwFrom: new THREE.Vector3(0, 1.7, 18.44),
+    throwTo: target1B,
+    runnerProg: jumpedEarly ? 0.26 : 0.20,
+    runnerState: jumpedEarly ? 'BREAK' : (isMeRunner ? 'LEAD' : (Math.random() < 0.22 && !game.bases[1] ? 'BREAK' : 'BACK')),
+    runnerMesh: rMesh,
+    isMeRunner, isMe1B,
+    tagTimer: 0, holdTimer: 0
+  };
+  game.subPhase = 'PICKOFF';
+  syncStaticRunners();
+  ballMesh.visible = true;
+  ballShadow.visible = true;
+  AudioFX.tone(480, 0.1);
+
+  if (isMeRunner) {
+    updateRunPadUI();
+    document.getElementById('run-ret-1').classList.add('alert');
+    setBanner('⚠️ 投手牽制！', jumpedEarly ? '太早起跑被抓包！快按 ↘ 回一壘！' : '快按 ↘ 回一壘！');
+    setTicker('⚠️ 投手轉身牽制一壘！');
+  } else if (isMe1B) {
+    setBanner('牽制球！', '準備接球！');
+    setTicker('投手轉身牽制一壘！');
+    updateDiveBtnState();
+  } else {
+    setTicker('投手轉身牽制一壘！');
+  }
 }
 
-function updateInteractiveTagUp(dt) {
-  if (!game.tagBallCaught) {
-    stepPhysics(state.ballPos, state.ballVel, 0.95, dt);
-    ballMesh.position.copy(state.ballPos);
-    ballMesh.scale.setScalar(THREE.MathUtils.clamp(camera.position.distanceTo(state.ballPos) * 0.025, 1.0, 2.5));
-    ballShadow.position.set(state.ballPos.x, 0.07, state.ballPos.z);
+function handlePickoff1BAction(mode) {
+  const pk = game.pickoff;
+  if (!pk || !pk.isMe1B || pk.stage !== 'HOLD_1B') return;
+  if (mode === 2) {
+    const cover2B = getBaseCoverFielder(2, 'PLAYER');
+    pk.stage = 'TO_2B';
+    pk.t = 0;
+    pk.dur = 0.56;
+    pk.throwFrom = player.pos.clone().setY(1.4);
+    pk.throwTo = cover2B ? cover2B.pos.clone().setY(1.35) : BASES[2].clone().setY(1.35);
+    setBanner('傳二壘！', '抓觸殺！');
+    setTicker('1B(你) 轉傳二壘抓盜壘跑者！');
+  } else {
+    pk.stage = 'TO_P';
+    pk.t = 0;
+    pk.dur = 0.45;
+    pk.throwFrom = player.pos.clone().setY(1.4);
+    pk.throwTo = new THREE.Vector3(0, 1.5, 18.44);
+    setBanner('回傳投手', '');
+    setTicker('1B(你) 將球回傳給投手');
+  }
+  updateDiveBtnState();
+}
 
-    if (holdRun) {
-      game.runProgress += 0.65 * dt;
-      const cur = new THREE.Vector3().lerpVectors(BASES[3], BASES[0], game.runProgress);
-      cur.y = 1.65; camera.position.copy(cur);
-      if (game.runProgress > 0.16) {
-        btnRun.style.display = 'none'; AudioFX.tone(150, 0.3);
-        game.bases[2] = false; game.playerBase = 0;
-        setBanner('提早離壘！', '還沒接殺就起跑，遭回傳三壘雙殺！');
-        if (!addOuts(2, '高飛球提早離壘！回傳三壘形成雙殺！')) { nextBatter(); enterAfterPause(1.8); }
-        updateGameUI(); return;
+function cleanupPickoff() {
+  if (game.pickoff && game.pickoff.runnerMesh) scene.remove(game.pickoff.runnerMesh);
+  game.pickoff = null;
+  document.getElementById('run-ret-1').classList.remove('alert');
+}
+
+function updatePickoff(dt, now) {
+  const pk = game.pickoff;
+  if (!pk) return;
+
+  if (pk.runnerState === 'BACK') {
+    pk.runnerProg = Math.max(0, pk.runnerProg - 0.52 * dt);
+  } else if (pk.runnerState === 'BREAK') {
+    pk.runnerProg = Math.min(1, pk.runnerProg + 0.33 * dt);
+  }
+  const rPos = new THREE.Vector3().lerpVectors(BASES[1], BASES[2], pk.runnerProg);
+  if (pk.isMeRunner) {
+    camera.position.set(rPos.x, 1.65, rPos.z);
+    lookTarget.lerp(ballMesh.position, 0.25);
+    camera.lookAt(lookTarget);
+  } else if (pk.runnerMesh) {
+    pk.runnerMesh.position.set(rPos.x, Math.abs(Math.sin(now * 0.02)) * 0.12, rPos.z);
+  }
+
+  const f2B = getFielderById('2B'), fSS = getFielderById('SS');
+  if (pk.runnerState === 'BREAK' && fSS && fSS.mesh.visible) moveObjToward(fSS.pos, BASES[2], fSS.speed, dt);
+  if (pk.runnerState === 'BREAK' && f2B && f2B.mesh.visible) moveObjToward(f2B.pos, BASES[2], f2B.speed, dt);
+  if (fSS) fSS.mesh.position.set(fSS.pos.x, 0, fSS.pos.z);
+  if (f2B) f2B.mesh.position.set(f2B.pos.x, 0, f2B.pos.z);
+  if (pk.isMe1B) {
+    updateCFMovement(dt, now);
+    lookTarget.lerp(pk.stage === 'HOLD_1B' ? (pk.runnerState === 'BREAK' ? BASES[2].clone().setY(1.2) : new THREE.Vector3(0, 1.4, 18.44)) : ballMesh.position, 0.2);
+    camera.lookAt(lookTarget);
+  } else if (!pk.isMeRunner) {
+    lookTarget.lerp(ballMesh.position, 0.2);
+    camera.lookAt(lookTarget);
+  }
+
+  if (pk.stage === 'TO_1B') {
+    pk.t += dt;
+    const p = Math.min(1, pk.t / pk.dur);
+    ballMesh.position.lerpVectors(pk.throwFrom, pk.throwTo, p);
+    ballMesh.position.y += Math.sin(p * Math.PI) * 0.6;
+    ballShadow.position.set(ballMesh.position.x, 0.07, ballMesh.position.z);
+    if (p >= 1) {
+      AudioFX.glovePop();
+      pk.stage = 'TAG_1B';
+      pk.tagTimer = 0.26;
+    }
+  } else if (pk.stage === 'TAG_1B') {
+    pk.tagTimer -= dt;
+    if (pk.tagTimer <= 0) {
+      if (pk.runnerState !== 'BREAK' && pk.runnerProg > 0.025) {
+        AudioFX.tone(170, 0.25);
+        game.bases[0] = false;
+        if (pk.isMeRunner) game.playerBase = 0;
+        cleanupPickoff();
+        setBanner('OUT! 牽制出局！', '回壘不及遭觸殺！');
+        if (!addOut('投手牽制一壘成功！跑者回壘不及出局！')) enterAfterPause(1.5);
+        updateGameUI();
+      } else if (pk.isMe1B) {
+        pk.stage = 'HOLD_1B';
+        pk.holdTimer = 3.5;
+        setBanner(pk.runnerState === 'BREAK' ? '跑者起跑了！' : '跑者回壘安全', pk.runnerState === 'BREAK' ? '快按 二（或 2）傳二壘抓觸殺！' : '按中間鈕（或 Space）回傳投手');
+        updateDiveBtnState();
+      } else if (pk.runnerState === 'BREAK') {
+        const cover2B = getBaseCoverFielder(2, '1B');
+        pk.stage = 'TO_2B';
+        pk.t = 0; pk.dur = 0.56;
+        pk.throwFrom = BASES[1].clone().setY(1.35);
+        pk.throwTo = cover2B ? cover2B.pos.clone().setY(1.35) : BASES[2].clone().setY(1.35);
+        setTicker('跑者起跑！一壘手轉傳二壘抓觸殺！');
+      } else {
+        cleanupPickoff();
+        setBanner('SAFE!', '安全撲回一壘');
+        enterAfterPause(0.95);
+        updateGameUI();
       }
     }
-    lookTarget.lerp(state.ballPos, 0.2); camera.lookAt(lookTarget);
-    if (state.ballPos.y <= 1.75 && state.ballVel.y < 0) {
-      game.tagBallCaught = true; AudioFX.glovePop(); AudioFX.tone(620, 0.14);
-      setBanner('接殺！快衝！', '按住「衝刺 / Space」滑回本壘！');
-    }
-  } else {
-    game.tagThrowTimer -= dt;
-    if (holdRun) {
-      game.runProgress = Math.min(1, game.runProgress + 0.66 * dt);
-      const cur = new THREE.Vector3().lerpVectors(BASES[3], BASES[0], game.runProgress);
-      cur.y = 1.65 + Math.sin(performance.now() * 0.024) * 0.09;
-      camera.position.copy(cur);
-      lookTarget.lerp(new THREE.Vector3(0, 1.2, 0), 0.22); camera.lookAt(lookTarget);
-    }
-    if (game.runProgress >= 1) {
-      btnRun.style.display = 'none'; AudioFX.cheer();
-      game.bases[2] = false; game.playerBase = 0; addRuns(1);
-      setBanner('SAFE! 得分！', '漂亮的高飛犧牲打！滑回本壘 +1 分');
-      if (!addOut('高飛犧牲打成功！你滑回本壘攻下 1 分！')) { nextBatter(); enterAfterPause(1.7); }
+  } else if (pk.stage === 'HOLD_1B') {
+    ballMesh.position.set(player.pos.x, 1.0, player.pos.z);
+    pk.holdTimer -= dt;
+    if (pk.holdTimer <= 0) handlePickoff1BAction(0);
+  } else if (pk.stage === 'TO_P') {
+    pk.t += dt;
+    const p = Math.min(1, pk.t / pk.dur);
+    ballMesh.position.lerpVectors(pk.throwFrom, pk.throwTo, p);
+    ballMesh.position.y += Math.sin(p * Math.PI) * 0.7;
+    if (p >= 1) {
+      AudioFX.glovePop();
+      if (pk.runnerState === 'BREAK' && pk.runnerProg >= 0.98) {
+        game.bases[0] = false; game.bases[1] = true;
+      }
+      cleanupPickoff();
+      enterAfterPause(0.75);
       updateGameUI();
-    } else if (game.tagThrowTimer <= 0) {
-      btnRun.style.display = 'none';
-      if (game.runProgress > 0.18) {
-        AudioFX.tone(160, 0.28); game.bases[2] = false; game.playerBase = 0;
-        setBanner('OUT! 本壘助殺！', '外野雷射肩回傳本壘觸殺出局！');
-        if (!addOuts(2, '高飛球接殺＋本壘助殺！形成雙殺！')) { nextBatter(); enterAfterPause(1.8); }
+    }
+  } else if (pk.stage === 'TO_2B') {
+    pk.t += dt;
+    const p = Math.min(1, pk.t / pk.dur);
+    ballMesh.position.lerpVectors(pk.throwFrom, pk.throwTo, p);
+    ballMesh.position.y += Math.sin(p * Math.PI) * 1.1;
+    ballShadow.position.set(ballMesh.position.x, 0.07, ballMesh.position.z);
+    if (p >= 1) {
+      AudioFX.glovePop();
+      pk.stage = 'TAG_2B';
+      pk.tagTimer = 0.28;
+    }
+  } else if (pk.stage === 'TAG_2B') {
+    pk.tagTimer -= dt;
+    if (pk.tagTimer <= 0) {
+      const safe = pk.runnerProg >= 0.98;
+      cleanupPickoff();
+      if (safe) {
+        AudioFX.cheer();
+        game.bases[0] = false; game.bases[1] = true;
+        if (pk.isMeRunner) game.playerBase = 2;
+        setBanner('SAFE!', '滑上二壘安全！');
+        enterAfterPause(1.2);
       } else {
-        setBanner('穩守三壘', '選擇不冒險，留在三壘');
-        if (!addOut('外野高飛球接殺出局！你選擇留在三壘')) { nextBatter(); enterAfterPause(1.4); }
+        AudioFX.tone(170, 0.25);
+        game.bases[0] = false;
+        if (pk.isMeRunner) game.playerBase = 0;
+        setBanner('OUT!', '夾殺觸殺出局！');
+        if (!addOut('跑者太早起跑遭牽制轉傳二壘觸殺出局！')) enterAfterPause(1.4);
       }
       updateGameUI();
     }
   }
 }
 
-function updateSteal(dt) {
-  const from = BASES[game.playerBase], to = BASES[game.runTargetBase];
-  game.runProgress = Math.min(1, game.runProgress + 0.62 * dt);
-  const cur = new THREE.Vector3().lerpVectors(from, to, game.runProgress);
-  cur.y = 1.65 + Math.sin(performance.now() * 0.022) * 0.09;
-  camera.position.copy(cur);
-  lookTarget.lerp(new THREE.Vector3(to.x, 1.3, to.z), 0.2); camera.lookAt(lookTarget);
-  if (game.runProgress >= 1) {
-    const safe = Math.random() < 0.72;
-    if (safe) {
-      AudioFX.cheer();
-      game.bases[game.playerBase - 1] = false; game.playerBase = game.runTargetBase; game.bases[game.playerBase - 1] = true;
-      setBanner('SAFE!', `盜上${['', '', '二', '三'][game.playerBase]}壘成功！`);
-      enterAfterPause(1.3);
-    } else {
-      AudioFX.tone(170, 0.25);
-      game.bases[game.playerBase - 1] = false; game.playerBase = 0;
-      setBanner('OUT!', '盜壘遭捕手阻殺出局！');
-      if (!addOut('盜壘失敗出局！')) enterAfterPause(1.4);
+function updateStealThrow(dt, now) {
+  const st = game.steal;
+  if (!st) return;
+
+  st.prog = Math.min(1, st.prog + st.speed * dt);
+  const rPos = new THREE.Vector3().lerpVectors(BASES[st.fromBase], BASES[st.toBase], st.prog);
+  if (st.isMe) {
+    camera.position.set(rPos.x, 1.65 + Math.sin(now * 0.022) * 0.08, rPos.z);
+    lookTarget.lerp(BASES[st.toBase].clone().setY(1.2), 0.2);
+    camera.lookAt(lookTarget);
+  } else if (st.mesh) {
+    st.mesh.position.set(rPos.x, Math.abs(Math.sin(now * 0.02)) * 0.14, rPos.z);
+  }
+
+  const cover = getBaseCoverFielder(st.toBase, '');
+  if (cover && cover.pos && !cover.isPlayer) {
+    moveObjToward(cover.pos, BASES[st.toBase], cover.speed || 7.8, dt);
+    if (cover.mesh) cover.mesh.position.set(cover.pos.x, 0, cover.pos.z);
+  }
+  if (!st.isMe) {
+    if (isPlayerFielding()) updateCFMovement(dt, now);
+    lookTarget.lerp(ballMesh.position, 0.2);
+    camera.lookAt(lookTarget);
+  }
+
+  if (st.stage === 'THROW') {
+    st.throwT += dt;
+    const p = Math.min(1, st.throwT / st.throwDur);
+    ballMesh.position.lerpVectors(st.throwFrom, st.throwTo, p);
+    ballMesh.position.y += Math.sin(p * Math.PI) * 1.25;
+    ballShadow.position.set(ballMesh.position.x, 0.07, ballMesh.position.z);
+    if (p >= 1) {
+      AudioFX.glovePop();
+      st.stage = 'TAG';
+      st.tagTimer = 0.28;
     }
-    updateGameUI();
+  } else if (st.stage === 'TAG') {
+    st.tagTimer -= dt;
+    if (st.tagTimer <= 0) {
+      const safe = st.prog >= 0.98;
+      const bName = ['', '', '二', '三'][st.toBase];
+      if (st.mesh) scene.remove(st.mesh);
+      game.steal = null;
+      if (safe) {
+        AudioFX.cheer();
+        game.bases[st.fromBase - 1] = false;
+        game.bases[st.toBase - 1] = true;
+        if (st.isMe) game.playerBase = st.toBase;
+        setBanner('SAFE!', `盜上${bName}壘成功！`);
+        setTicker(`盜上${bName}壘成功！`);
+        enterAfterPause(1.3);
+      } else {
+        AudioFX.tone(170, 0.25);
+        game.bases[st.fromBase - 1] = false;
+        if (st.isMe) game.playerBase = 0;
+        setBanner('OUT!', `捕手狙殺！盜${bName}壘失敗！`);
+        if (!addOut(`捕手長傳${bName}壘觸殺出局！`)) enterAfterPause(1.4);
+      }
+      updateGameUI();
+    }
   }
 }
 
@@ -3403,7 +3693,10 @@ function animate(now) {
         lookTarget.lerp(new THREE.Vector3(0, 1.8, 0), 0.12); camera.lookAt(lookTarget);
       }
       game.timer -= dt;
-      if (game.timer <= 0) launchSimPitch(game.subPhase === 'DEF_WAIT');
+      if (game.timer <= 0) {
+        if (game.bases[0] && Math.random() < 0.18) startPickoff(false);
+        else launchSimPitch(game.subPhase === 'DEF_WAIT');
+      }
     } else if (game.subPhase === 'DEF_PITCH' || game.subPhase === 'OFF_SIM_PITCH') {
       if (game.subPhase === 'DEF_PITCH') updateCFMovement(dt, now);
       state.pitchT += dt * state.speed;
@@ -3418,6 +3711,18 @@ function animate(now) {
       if (game.subPhase === 'DEF_PITCH') lookTarget.lerp(new THREE.Vector3(0, 1.8, 0), 0.12);
       else lookTarget.lerp(ballMesh.position, 0.2);
       camera.lookAt(lookTarget);
+      if (game.steal && game.steal.stage === 'PITCHING') {
+        const st = game.steal;
+        st.prog = Math.min(1, st.prog + st.speed * dt);
+        const rp = new THREE.Vector3().lerpVectors(BASES[st.fromBase], BASES[st.toBase], st.prog);
+        if (st.isMe) {
+          camera.position.set(rp.x, 1.65 + Math.sin(now * 0.022) * 0.08, rp.z);
+          lookTarget.lerp(BASES[st.toBase].clone().setY(1.2), 0.2);
+          camera.lookAt(lookTarget);
+        } else if (st.mesh) {
+          st.mesh.position.set(rp.x, Math.abs(Math.sin(now * 0.02)) * 0.14, rp.z);
+        }
+      }
       if (p >= 1) resolveSimPitch(game.subPhase === 'DEF_PITCH');
     } else if (game.subPhase === 'LIVE_PLAY') {
       updateLivePlay(dt, now);
@@ -3462,10 +3767,10 @@ function animate(now) {
       lookTarget.lerp(state.ballPos, 0.16); camera.lookAt(lookTarget);
       game.timer -= dt;
       if (game.timer <= 0) enterCurrentRole();
-    } else if (game.subPhase === 'BASE_STEAL') {
-      updateSteal(dt);
-    } else if (game.subPhase === 'BASE_TAGUP') {
-      updateInteractiveTagUp(dt);
+    } else if (game.subPhase === 'PICKOFF') {
+      updatePickoff(dt, now);
+    } else if (game.subPhase === 'STEAL_THROW') {
+      updateStealThrow(dt, now);
     }
   } else if (state.mode !== 'game') {
     if (state.phase === 'PITCHING') {
