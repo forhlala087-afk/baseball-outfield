@@ -1458,7 +1458,7 @@ function startLiveBallInPlay(ev, la, spray, spin, isMeBatting = false, tag = '')
     landingRing.visible = true;
   }
 
-  if (isPlayerOffense() && !isMeBatting && game.playerBase === 3 && game.outs < 2 && la > 20 && Math.hypot(sim.land.x, sim.land.z) > 62) {
+  if (isPlayerOffense() && !isMeBatting && game.playerBase === 3 && game.outs < 2 && la > 20 && Math.hypot(sim.land.x, sim.land.z) > 62 && Math.hypot(sim.land.x, sim.land.z) < wallRadius) {
     startInteractiveTagUp(spray);
     return;
   }
@@ -1468,10 +1468,10 @@ function startLiveBallInPlay(ev, la, spray, spin, isMeBatting = false, tag = '')
 
   if (isPlayerOffense() && (game.playerBase > 0 || isMeBatting)) {
     btnSteal.style.display = 'none';
+    btnRun.textContent = '🏃 按住衝刺（放開回壘）';
     btnRun.style.display = 'block';
     holdRun = false;
   }
-
   game.play = {
     isMeBatting, ev, la, spray, tag,
     landed: false, fielded: false, fielderId: null, fielderRef: null,
@@ -1686,20 +1686,17 @@ function updateLivePlay(dt, now) {
 
   if (isPlayerFielding()) updateCFMovement(dt, now);
 
+  if (!pl.isHR) updateFieldersAndCoverage(dt);
+
   if (pl.isHR) {
-    stepPhysics(state.ballPos, state.ballVel, state.meta.spin, dt);
-    ballMesh.position.copy(state.ballPos);
-    ballMesh.scale.setScalar(THREE.MathUtils.clamp(camera.position.distanceTo(state.ballPos) * 0.025, 1.0, 2.8));
-    lookTarget.lerp(state.ballPos, 0.2);
-    camera.lookAt(lookTarget);
-    pl.hrTimer -= dt;
-    if (pl.hrTimer <= 0) finishLivePlayHR();
-    return;
-  }
-
-  updateFieldersAndCoverage(dt);
-
-  if (pl.throwDelay > 0) {
+    if (pl.hrTimer > 0) pl.hrTimer -= dt;
+    if (state.ballPos.y > 0.15) {
+      stepPhysics(state.ballPos, state.ballVel, state.meta.spin, dt);
+      if (state.ballPos.y <= 0.15) state.ballPos.y = 0.15;
+      ballMesh.position.copy(state.ballPos);
+      ballMesh.scale.setScalar(THREE.MathUtils.clamp(camera.position.distanceTo(state.ballPos) * 0.025, 1.0, 2.8));
+    }
+  } else if (pl.throwDelay > 0) {
     pl.throwDelay -= dt;
     if (pl.pendingFromPlayer) {
       ballMesh.position.set(player.pos.x, player.pos.y - 0.15, player.pos.z - 0.35);
@@ -1728,13 +1725,22 @@ function updateLivePlay(dt, now) {
     const distFromHome = Math.hypot(state.ballPos.x, state.ballPos.z);
     if (!pl.landed && distFromHome >= wallRadius && state.ballPos.y > 3.1 && Math.abs(Math.atan2(state.ballPos.x, state.ballPos.z)) < Math.PI * 0.25) {
       pl.isHR = true;
-      pl.hrTimer = 1.65;
+      pl.hrTimer = 1.5;
+      landingRing.visible = false;
+      btnRun.textContent = '🏃 按住衝刺（放開慢跑繞壘）';
+      liveRunners.forEach(r => {
+        if (!r.out && !r.scored) {
+          r.stopped = false;
+          r.retreating = false;
+          r.leadGrace = 0;
+          if (r.baseTo <= r.baseFrom) r.baseTo = r.baseFrom + 1;
+        }
+      });
       AudioFX.cheer();
       setBanner('HOME RUN!!', `飛出全壘打牆！飛行距離 ${Math.round(distFromHome + 10)} 公尺`);
       setTicker(pl.isMeBatting ? '你轟出特大號全壘打！' : `${isPlayerDefense() ? '對手' : '隊友'}轟出全壘打！`);
       return;
     }
-
     if (distFromHome >= wallRadius - 0.5 && state.ballPos.y <= 3.1) {
       const nx = state.ballPos.x / distFromHome, nz = state.ballPos.z / distFromHome;
       state.ballPos.x = nx * (wallRadius - 0.6);
@@ -1852,7 +1858,7 @@ function updateLivePlay(dt, now) {
     if (r.out || r.scored) return;
 
     if (r.startBase === undefined) r.startBase = r.baseFrom;
-    const isAirFly = game.outs < 2 && !pl.landed && !pl.flyCaught && pl.la > 8;
+    const isAirFly = !pl.isHR && game.outs < 2 && !pl.landed && !pl.flyCaught && pl.la > 8;
     const forcedNow = !pl.flyCaught && r.isForced && (pl.landed || game.outs === 2);
 
     // 檢查後面有沒有跑者正在往自己原本的壘包衝（被後位跑者推著走）
@@ -1919,7 +1925,7 @@ function updateLivePlay(dt, now) {
 
     // 球落地安打（或滾穿到外野）時，原本壘包往前推進這一個壘包直接衝、不受 1/2 限制；繞過該壘包想再拚下一壘才看 1/2
     const commitFirstBase = !r.isMe && r.baseFrom === r.startBase && pl.landed && !pl.flyCaught && (pl.la > 8 || state.ballPos.z > 40);
-    if (r.baseFrom >= 1 && !r.retreating && !forcedNow && !pushedByTrailer && !commitFirstBase) {
+    if (!pl.isHR && r.baseFrom >= 1 && !r.retreating && !forcedNow && !pushedByTrailer && !commitFirstBase) {
       if (r.isMe && isPlayerOffense()) {
         if (!holdRun && !(r.leadGrace > 0) && r.progress > 0.03 && r.progress < 0.5) r.retreating = true;
       } else if (!pl.flyCaught) {
@@ -1963,7 +1969,9 @@ function updateLivePlay(dt, now) {
 
     if (r.isMe && isPlayerOffense()) {
       const twoOutAutoRun = game.outs === 2 && !pl.landed && !pl.fielded;
-      const spd = ((r.baseFrom === 0 || forcedNow || twoOutAutoRun || holdRun) ? 0.32 : 0.0) * speedScale;
+      const spd = (pl.isHR
+        ? (holdRun ? 0.34 : 0.20)
+        : ((r.baseFrom === 0 || forcedNow || twoOutAutoRun || holdRun) ? 0.32 : 0.0)) * speedScale;
       r.progress += spd * dt;
       const cur = new THREE.Vector3().lerpVectors(BASES[r.baseFrom % 4], BASES[r.baseTo % 4], Math.min(1, r.progress));
       cur.y = 1.65 + (spd > 0 ? Math.sin(now * 0.022) * 0.08 : 0);
@@ -1971,14 +1979,19 @@ function updateLivePlay(dt, now) {
       const baseLook = BASES[r.baseTo % 4].clone().setY(1.3);
       const runDir = baseLook.clone().sub(cur).normalize();
       const ballDir = ballMesh.position.clone().sub(cur).normalize();
-      const gaze = (spd === 0 && r.leadGrace > 0)
-        ? ballMesh.position
-        : (runDir.dot(ballDir) > -0.25 ? baseLook.clone().lerp(ballMesh.position, 0.55) : baseLook);
+      const gaze = (pl.isHR && pl.hrTimer <= 0)
+        ? baseLook
+        : ((spd === 0 && r.leadGrace > 0)
+          ? ballMesh.position
+          : (runDir.dot(ballDir) > -0.25 ? baseLook.clone().lerp(ballMesh.position, 0.55) : baseLook));
       lookTarget.lerp(gaze, 0.16);
       camera.lookAt(lookTarget);
       if (spd > 0 || r.leadGrace > 0) anyMoving = true;
     } else {
-      r.progress += r.speed * speedScale * dt;
+      const aiSpd = pl.isHR
+        ? Math.max(r.speed, 0.28) * (state.speed === 2 && !liveRunners.some(x => x.isMe && isPlayerOffense()) ? 1.6 : 1.0)
+        : r.speed;
+      r.progress += aiSpd * speedScale * dt;
       const cur = new THREE.Vector3().lerpVectors(BASES[r.baseFrom % 4], BASES[r.baseTo % 4], Math.min(1, r.progress));
       cur.y = Math.abs(Math.sin(now * 0.018)) * 0.14;
       r.mesh.position.copy(cur);
@@ -1991,18 +2004,36 @@ function updateLivePlay(dt, now) {
       r.progress = 0;
       if (r.baseFrom >= 4) {
         r.scored = true; r.mesh.visible = false;
+        if (r.isMe && isPlayerOffense()) btnRun.style.display = 'none';
         addRuns(1);
         if (pl.isMeBatting) game.stats.rbi++;
         AudioFX.tone(660, 0.15);
+        updateGameUI();
       } else {
         const ballLive = !pl.fielded && !pl.throwActive;
-        const canStretch = !pl.flyCaught && (pushedByTrailer || (r.isMe && holdRun) || (!r.isMe && ballLive && r.baseFrom < 4));
+        const canStretch = pl.isHR || (!pl.flyCaught && (pushedByTrailer || (r.isMe && holdRun) || (!r.isMe && ballLive && r.baseFrom < 4)));
         if (canStretch) r.baseTo = r.baseFrom + 1;
         else { r.stopped = true; r.mesh.position.copy(BASES[r.baseFrom]); }
       }
     }
   });
 
+  if (pl.isHR) {
+    const meStillRunning = liveRunners.some(r => r.isMe && isPlayerOffense() && !r.scored && !r.out);
+    if (!meStillRunning) {
+      let watchPos = ballMesh.position;
+      if (pl.hrTimer <= 0) {
+        const lastR = liveRunners.slice().reverse().find(r => !r.out && !r.scored);
+        watchPos = lastR ? lastR.mesh.position.clone().setY(1.4) : new THREE.Vector3(0, 1.2, 0);
+      }
+      lookTarget.lerp(watchPos, 0.16);
+      camera.lookAt(lookTarget);
+    }
+    if (liveRunners.every(r => r.out || r.scored) || pl.elapsed > 40) {
+      finishLivePlayHR();
+    }
+    return;
+  }
   if (isPlayerDefense() && (player.hasBall || pl.pendingFromPlayer)) {
     let aim = new THREE.Vector3(0, 1.4, 22);
     if (pl.pendingFromPlayer && pl.pendingThrowTargetPos) {
@@ -2130,16 +2161,29 @@ function handleAIFieldGroundBall(f) {
   const isInfield = f.type === 'IF';
   if (isInfield) {
     const batterRunning1B = liveRunners.some(r => r.isBatter && !r.out && !r.scored && r.baseTo === 1 && !r.stopped);
-    const forceAt2B = pl.tag !== '軟弱滾地' && game.outs < 2 && liveRunners.some(r => !r.out && !r.scored && r.isForced && r.baseTo === 2);
     let targetBase = 0;
     let isDPAttempt = false;
 
-    if (forceAt2B && batterRunning1B) {
-      targetBase = 2;
-      isDPAttempt = true;
-    } else if (batterRunning1B) {
-      targetBase = 1;
+    if (pl.tag === '軟弱滾地') {
+      if (game.outs < 2) {
+        const leadForced = liveRunners.find(r =>
+          !r.isBatter && !r.out && !r.scored && !r.stopped && !r.retreating &&
+          r.isForced && r.progress < 0.75 && getBaseCoverFielder(r.baseTo, f.id)
+        );
+        if (leadForced) targetBase = leadForced.baseTo;
+      }
+      if (targetBase === 0 && batterRunning1B) targetBase = 1;
     } else {
+      const forceAt2B = game.outs < 2 && liveRunners.some(r => !r.out && !r.scored && r.isForced && r.baseTo === 2);
+      if (forceAt2B && batterRunning1B) {
+        targetBase = 2;
+        isDPAttempt = true;
+      } else if (batterRunning1B) {
+        targetBase = 1;
+      }
+    }
+
+    if (targetBase === 0) {
       // 打者已經踩過一壘（例如沖天炮落地），改抓還在往前衝的領先跑者
       let leadAdv = 0;
       liveRunners.forEach(r => {
@@ -2158,8 +2202,8 @@ function handleAIFieldGroundBall(f) {
       return;
     }
 
-    // 一壘或二壘方向滾地球要抓雙殺時，由游擊手進二壘補位；三壘方向則由二壘手補位
-    if (isDPAttempt && targetBase === 2 && (f.id === '1B' || f.id === '2B') && isPlayerDefense() && game.playerPos === 'SS') {
+    // 一壘或二壘方向滾地球要抓二壘時，若玩家游擊手還沒補位就改傳一壘
+    if (targetBase === 2 && (f.id === '1B' || f.id === '2B') && isPlayerDefense() && game.playerPos === 'SS') {
       const ssDist2B = Math.hypot(player.pos.x - BASES[2].x, player.pos.z - BASES[2].z);
       if (ssDist2B > 7.5) {
         targetBase = 1;
@@ -2364,12 +2408,19 @@ function resolveThrowArrival() {
 
 function finishLivePlayHR() {
   const pl = game.play;
-  let scored = 1;
-  for (let i = 0; i < 3; i++) if (game.bases[i]) scored++;
+  if (!pl || pl.resolved) return;
+  pl.resolved = true;
+  btnRun.style.display = 'none';
+  liveRunners.forEach(r => {
+    if (!r.out && !r.scored) {
+      r.scored = true;
+      addRuns(1);
+      if (pl.isMeBatting) game.stats.rbi++;
+    }
+  });
   game.bases = [false, false, false];
   game.playerBase = 0;
-  addRuns(scored);
-  if (pl.isMeBatting) { game.stats.h++; game.stats.hr++; game.stats.rbi += scored; }
+  if (pl.isMeBatting) { game.stats.h++; game.stats.hr++; }
   nextBatter();
   enterAfterPause(1.4);
   updateGameUI();
