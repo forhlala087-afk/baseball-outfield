@@ -1099,7 +1099,9 @@ function getRunnerProgressTo(tb) {
 }
 function hasRunnerMovingTo(tb) {
   const p = getRunnerProgressTo(tb);
-  return p >= 0 && p <= 0.75;
+  if (p < 0) return false;
+  if (p <= 0.75) return true;
+  return liveRunners.some(lr => !lr.out && !lr.scored && lr.stopped && lr.baseFrom === tb);
 }
 function getBaseCoverFielder(tb, excludeId = '') {
   if (tb === 4) return { id: 'C', pos: catcherMesh.position, isCatcher: true };
@@ -2042,7 +2044,7 @@ function updateLivePlay(dt, now) {
     }
     if (!pl.isHR && r.baseFrom >= 1 && !r.retreating && !forcedNow && !pushedByTrailer) {
       if (r.isMe && isPlayerOffense()) {
-        if (!holdRun && !(r.leadGrace > 0) && r.progress > 0.03 && r.progress < 0.5) r.retreating = true;
+        if (!holdRun && !(r.leadGrace > 0) && r.progress > 0.03) r.retreating = true;
       } else if (!pl.flyCaught) {
         if (blockedByLead) {
           r.retreating = true;
@@ -2378,8 +2380,9 @@ function handleAIFieldGroundBall(f) {
     const targetBase = getBestThrowTargetBase(false);
     const bName = ['本', '一', '二', '三', '本'][targetBase];
     const prog = getRunnerProgressTo(targetBase);
-    const canDirectThrow = prog >= 0.25 && prog <= 0.75 && f.pos.z <= 84;
-    const wantRelayOut = prog >= 0 && prog <= 0.75;
+    const movingTarget = hasRunnerMovingTo(targetBase);
+    const canDirectThrow = movingTarget && prog >= 0.25 && f.pos.z <= 84;
+    const wantRelayOut = movingTarget;
     const cover = canDirectThrow ? getBaseCoverFielder(targetBase, f.id) : null;
     if (!canDirectThrow || !cover) {
       const cutoff = getCutoffFielder(f.pos);
@@ -2474,8 +2477,8 @@ function resolveThrowArrival() {
     if (r.out || r.scored) return;
     const isForcePlay = r.isForced && !pl.flyCaught;
     const minProg = isForcePlay ? 0.05 : 0.5;
-    const caughtAdvancing = !r.retreating && r.baseTo === tb && r.progress > minProg && r.progress < 0.99;
-    const caughtOffBase = r.leftEarly && r.baseFrom === tb && r.progress > 0.05;
+    const caughtAdvancing = r.baseTo === tb && r.progress > minProg && r.progress < 0.99 && (!r.retreating || r.progress > 0.55);
+    const caughtOffBase = r.baseFrom === tb && ((r.leftEarly && r.progress > 0.05) || (r.retreating && r.progress > 0.08));
     if (caughtAdvancing || caughtOffBase) {
       r.out = true;
       r.mesh.visible = false;
@@ -2526,8 +2529,10 @@ function resolveThrowArrival() {
   }
 
   const advancing = liveRunners.filter(r => !r.out && !r.scored && !r.stopped && !r.retreating && r.progress > 0.1 && r.baseTo !== tb);
-  if (advancing.length > 0 && (pl.extraThrows || 0) < 2) {
-    const nextTb = advancing[0].baseTo;
+  const scramblingBack = liveRunners.filter(r => !r.out && !r.scored && !r.stopped && r.retreating && r.progress > 0.25 && r.baseFrom >= 1 && r.baseFrom !== tb);
+  const nextTargetRunner = advancing[0] || scramblingBack[0];
+  if (nextTargetRunner && (pl.extraThrows || 0) < 2) {
+    const nextTb = nextTargetRunner.retreating ? nextTargetRunner.baseFrom : nextTargetRunner.baseTo;
     const nextCover = getBaseCoverFielder(nextTb, '');
     if (nextCover) {
       pl.extraThrows = (pl.extraThrows || 0) + 1;
