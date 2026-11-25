@@ -1796,6 +1796,8 @@ function updateFieldersAndCoverage(dt) {
           if (!f.mesh.visible || f.stunTimer > 0) return;
           if (pl.tag === '車布邊' && f.type === 'IF') return;
           const t = (!pl.landed && (f.type === 'OF' || pl.la > 18)) ? state.meta.land : state.ballPos;
+          const isCornerIF = f.id === '1B' || f.id === '3B';
+          const maxRange = f.type === 'IF' ? (pl.tag === '軟弱滾地' ? 20 : (pl.la > 18 ? (isCornerIF ? 13 : 16) : (isCornerIF ? 11 : 14))) : 52;
           if (Math.hypot(t.x - f.home.x, t.z - f.home.z) < maxRange) {
             const d = Math.hypot(t.x - f.pos.x, t.z - f.pos.z);
             if (d < bestDist) { bestDist = d; primaryChaser = f; }
