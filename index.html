@@ -1601,8 +1601,17 @@ function moveObjToward(objPos, targetPos, speed, dt) {
 
 function updateFieldersAndCoverage(dt) {
   const pl = game.play;
-  const ballInOutfield = state.ballPos.z > 46 || state.meta.land.z > 50;
-  const cutoffId = state.ballPos.x >= 0 ? 'SS' : '2B';
+  const isCornerLine = pl.tag === '車布邊';
+  const ballInOutfield = isCornerLine || state.ballPos.z > 46 || state.meta.land.z > 50;
+  const cutoffId = (isCornerLine ? pl.spray >= 0 : state.ballPos.x >= 0) ? 'SS' : '2B';
+  const isCornerCutoff = isCornerLine || (ballInOutfield && Math.abs(state.ballPos.x) > 30);
+  const cutPos = isCornerCutoff
+    ? new THREE.Vector3(
+        (cutoffId === 'SS' ? 1 : -1) * THREE.MathUtils.clamp(Math.abs(state.ballPos.x) * 0.62, 26, 40),
+        0,
+        THREE.MathUtils.clamp(state.ballPos.z * 0.78, 44, 58)
+      )
+    : new THREE.Vector3(THREE.MathUtils.clamp(state.ballPos.x * 0.48, -22, 22), 0, 52);
 
   let primaryChaser = null;
   let bloopIF = null, bloopOF = null;
@@ -1662,14 +1671,12 @@ function updateFieldersAndCoverage(dt) {
       if (pl.tag === '軟弱滾地' && firstBaseOffBag) {
         moveObjToward(f.pos, BASES[1], f.speed, dt);
       } else if (ballInOutfield && cutoffId === '2B') {
-        const cutPos = new THREE.Vector3(THREE.MathUtils.clamp(state.ballPos.x * 0.48, -22, 22), 0, 52);
         moveObjToward(f.pos, cutPos, f.speed, dt);
       } else {
         moveObjToward(f.pos, BASES[2], f.speed, dt);
       }
     } else if (f.id === 'SS') {
       if (ballInOutfield && cutoffId === 'SS') {
-        const cutPos = new THREE.Vector3(THREE.MathUtils.clamp(state.ballPos.x * 0.48, -22, 22), 0, 52);
         moveObjToward(f.pos, cutPos, f.speed, dt);
       } else {
         moveObjToward(f.pos, BASES[2], f.speed, dt);
@@ -1867,8 +1874,14 @@ function updateLivePlay(dt, now) {
       ((tr.baseTo === r.baseFrom && ((tr.isForced && !pl.flyCaught) || tr.progress > 0.5)) || tr.baseFrom >= r.baseFrom)
     );
 
+    // 提前抓前位跑者，確認前方目標壘包有沒有被停壘／回壘的前位跑者擋住
+    const leadRunner = liveRunners.slice(0, idx).reverse().find(lr => !lr.out && !lr.scored);
+    const nextTargetBase = r.stopped ? (r.baseFrom + 1) : r.baseTo;
+    const leadHoldingBag = leadRunner && (leadRunner.stopped || leadRunner.retreating || (leadRunner.isMe && isPlayerOffense() && !holdRun && leadRunner.progress < 0.15));
+    const blockedByLead = !!(leadHoldingBag && leadRunner.baseFrom <= nextTargetBase);
+
     if (r.stopped) {
-      if (r.baseFrom < 4 && !pl.flyNoThrow && (pushedByTrailer || (r.isMe && isPlayerOffense() && holdRun) || (!r.isMe && !pl.flyCaught && !pl.fielded && !pl.throwActive && !isAirFly))) {
+      if (r.baseFrom < 4 && !pl.flyNoThrow && !blockedByLead && (pushedByTrailer || (r.isMe && isPlayerOffense() && holdRun) || (!r.isMe && !pl.flyCaught && !pl.fielded && !pl.throwActive && !isAirFly))) {
         r.stopped = false;
         r.baseTo = r.baseFrom + 1;
       } else {
@@ -1923,18 +1936,32 @@ function updateLivePlay(dt, now) {
       }
     }
 
-    // 球落地安打（或滾穿到外野）時，原本壘包往前推進這一個壘包直接衝、不受 1/2 限制；繞過該壘包想再拚下一壘才看 1/2
+    // 球落地安打（或滾穿到外野）時，原本壘包往前推進這一個壘包直接衝；繞過該壘包想拚下一壘時，反方向長傳改看 1/3，其餘看 1/2
     const commitFirstBase = !r.isMe && r.baseFrom === r.startBase && pl.landed && !pl.flyCaught && (pl.la > 8 || state.ballPos.z > 40);
-    if (!pl.isHR && r.baseFrom >= 1 && !r.retreating && !forcedNow && !pushedByTrailer && !commitFirstBase) {
+    let retreatThreshold = 0.5;
+    if (pl.landed && !pl.flyCaught && state.ballPos.z > 42 && r.baseTo >= 2 && r.baseTo <= 4) {
+      const fromP = BASES[r.baseFrom % 4];
+      const toP = BASES[r.baseTo % 4];
+      const runX = toP.x - fromP.x, runZ = toP.z - fromP.z;
+      const ballX = state.ballPos.x - fromP.x, ballZ = state.ballPos.z - fromP.z;
+      const dot = (runX * ballX + runZ * ballZ) / ((Math.hypot(runX, runZ) || 1) * (Math.hypot(ballX, ballZ) || 1));
+      const throwDist = Math.hypot(state.ballPos.x - toP.x, state.ballPos.z - toP.z);
+      if (dot < -0.45 && throwDist > 55) retreatThreshold = 1 / 3;
+    }
+    if (!pl.isHR && r.baseFrom >= 1 && !r.retreating && !forcedNow && !pushedByTrailer) {
       if (r.isMe && isPlayerOffense()) {
         if (!holdRun && !(r.leadGrace > 0) && r.progress > 0.03 && r.progress < 0.5) r.retreating = true;
       } else if (!pl.flyCaught) {
-        if ((pl.fielded || pl.throwActive) && r.progress < 0.5) r.retreating = true;
+        if (blockedByLead) {
+          r.retreating = true;
+        } else if (!commitFirstBase && (pl.fielded || pl.throwActive) && r.progress < retreatThreshold) {
+          r.retreating = true;
+        }
       }
     }
 
     if (r.retreating) {
-      if (pushedByTrailer || (r.isMe && isPlayerOffense() && holdRun && !r.leftEarly)) {
+      if ((pushedByTrailer && !blockedByLead) || (r.isMe && isPlayerOffense() && holdRun && !r.leftEarly)) {
         r.retreating = false;
       } else {
         r.progress -= r.speed * 1.25 * dt;
@@ -1959,7 +1986,6 @@ function updateLivePlay(dt, now) {
     }
 
     // 避免後位跑者超車前位跑者
-    const leadRunner = liveRunners.slice(0, idx).reverse().find(lr => !lr.out && !lr.scored);
     let speedScale = 1.0;
     if (leadRunner) {
       const myTotal = r.baseFrom + r.progress;
