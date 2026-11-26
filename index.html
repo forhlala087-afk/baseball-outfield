@@ -344,10 +344,10 @@
 </div>
 
 <div id="start-btn-wrap" style="text-align:center; width:min(92vw, 360px);">
-  <div id="setup-panel" class="panel" style="margin-bottom:10px; text-align:left; font-size:12px;">
+  <div id="setup-panel" class="panel" style="margin-bottom:8px; text-align:left; font-size:12px;">
     <div style="display:flex; gap:6px; margin-bottom:6px; align-items:center;">
-      <span style="color:#9fb3c8; min-width:34px;">守位</span>
-      <select id="sel-pos" style="flex:1; background:#1c2b3a; color:#fff; border:1px solid #455a64; border-radius:6px; padding:4px;">
+      <span style="color:#9fb3c8; min-width:28px;">守位</span>
+      <select id="sel-pos" style="flex:1; min-width:0; background:#1c2b3a; color:#fff; border:1px solid #455a64; border-radius:6px; padding:4px;">
         <option value="CF" selected>中外野手 (CF)</option>
         <option value="LF">左外野手 (LF)</option>
         <option value="RF">右外野手 (RF)</option>
@@ -358,23 +358,33 @@
         <option value="DH">指定打擊 (DH)</option>
         <option value="P" disabled>投手 (開發中)</option>
       </select>
-    </div>
-    <div style="display:flex; gap:6px; align-items:center;">
-      <span style="color:#9fb3c8; min-width:34px;">棒次</span>
-      <select id="sel-order" style="flex:1; background:#1c2b3a; color:#fff; border:1px solid #455a64; border-radius:6px; padding:4px;">
-        <option value="1">第 1 棒</option><option value="2">第 2 棒</option>
-        <option value="3" selected>第 3 棒</option><option value="4">第 4 棒</option>
-        <option value="5">第 5 棒</option><option value="6">第 6 棒</option>
-        <option value="7">第 7 棒</option><option value="8">第 8 棒</option>
-        <option value="9">第 9 棒</option>
-      </select>
       <span style="color:#9fb3c8;">打擊</span>
       <select id="sel-hand" style="background:#1c2b3a; color:#fff; border:1px solid #455a64; border-radius:6px; padding:4px;">
         <option value="R" selected>右打</option>
         <option value="L">左打</option>
       </select>
     </div>
+    <div style="display:flex; gap:6px; align-items:center;">
+      <span style="color:#9fb3c8; min-width:28px;">棒次</span>
+      <select id="sel-order" style="flex:1; min-width:0; background:#1c2b3a; color:#fff; border:1px solid #455a64; border-radius:6px; padding:4px;">
+        <option value="1">第 1 棒</option><option value="2">第 2 棒</option>
+        <option value="3" selected>第 3 棒</option><option value="4">第 4 棒</option>
+        <option value="5">第 5 棒</option><option value="6">第 6 棒</option>
+        <option value="7">第 7 棒</option><option value="8">第 8 棒</option>
+        <option value="9">第 9 棒</option>
+      </select>
+      <div id="room-active" style="display:none; gap:5px; align-items:center;">
+        <button class="btn" id="btn-copy-link" style="white-space:nowrap;">複製連結</button>
+        <button class="btn" id="btn-leave-room" style="background:#c62828; border-color:#ef9a9a; white-space:nowrap;">退出</button>
+      </div>
+    </div>
+    <div id="room-idle" style="display:flex; gap:5px; align-items:center; margin-top:7px; padding-top:7px; border-top:1px solid rgba(255,255,255,0.12);">
+      <button class="btn" id="btn-create-room" style="background:#1565c0; border-color:#64b5f6; white-space:nowrap;">創建房間</button>
+      <input id="inp-room-id" type="text" maxlength="12" placeholder="輸入6碼代碼" style="flex:1; min-width:0; background:#1c2b3a; color:#fff; border:1px solid #455a64; border-radius:6px; padding:5px 7px; font-size:12px; user-select:text; -webkit-user-select:text;">
+      <button class="btn" id="btn-join-room" style="background:#2e7d32; border-color:#66bb6a; white-space:nowrap;">加入</button>
+    </div>
   </div>
+  <div id="mp-status" style="margin-bottom:8px; font-size:12px; color:#81d4fa; font-weight:700; line-height:1.35; text-shadow:0 1px 4px #000;">單人模式（可直接開賽，或創建／加入房間）</div>
   <button class="btn primary" id="btn-start" style="width:100%;">PLAY BALL！（Space）</button>
 </div>
 <div id="quiz-controls">
@@ -425,7 +435,8 @@
 </div>
   <div id="bottom-bar">WASD / 搖桿守備 ｜ Space 揮棒・撲接・撿球回傳・跑壘</div>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="/socket.io/socket.io.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script>
 const AudioFX = (() => {
   let ctx = null;
@@ -1102,6 +1113,12 @@ function setRunnerTargetBase(tb) {
   } else if (tb <= r.baseFrom && r.progress > 0.01) {
     r.retreating = true;
   }
+  if (mp.active) {
+    mp.socket.emit('game_event', {
+      type: 'runner_cmd', startBase: r.startBase,
+      targetBase: r.targetBase, retreating: r.retreating, stopped: r.stopped
+    });
+  }
   updateRunPadUI();
 }
 
@@ -1109,6 +1126,7 @@ function triggerRunnerRetreat(retBase) {
   if (state.mode === 'game' && game.subPhase === 'PICKOFF' && isPlayerOffense() && game.pickoff && retBase === 1) {
     if (game.pickoff.runnerState !== 'BACK') {
       game.pickoff.runnerState = 'BACK';
+      if (mp.active) mp.socket.emit('game_event', { type: 'pickoff_retreat' });
       document.getElementById('run-ret-1').classList.remove('alert');
       AudioFX.tone(420, 0.08);
       setBanner('撲回一壘！', '');
@@ -1127,6 +1145,12 @@ function triggerRunnerRetreat(retBase) {
   } else {
     r.retreating = false;
     r.stopped = true;
+  }
+  if (mp.active) {
+    mp.socket.emit('game_event', {
+      type: 'runner_cmd', startBase: r.startBase,
+      targetBase: r.targetBase, retreating: r.retreating, stopped: r.stopped
+    });
   }
   updateRunPadUI();
 }
@@ -1352,6 +1376,7 @@ function callMyBall() {
   pl.callerId = game.playerPos;
   pl.callerIsPlayer = true;
   AudioFX.tone(740, 0.12);
+  if (mp.active) mp.socket.emit('game_event', { type: 'call_ball', pos: game.playerPos });
   setBanner('MY BALL!', '你已喊聲，隊友退讓補位！');
   setTicker(`📣 ${game.playerPos}(你) 喊聲：MY BALL！`);
   updateDiveBtnState();
@@ -1389,6 +1414,7 @@ function pickUpBallCF() {
   game.play.fielderId = game.playerPos;
   player.hasBall = true;
   AudioFX.glovePop();
+  if (mp.active) mp.socket.emit('game_event', { type: 'pickup', pos: game.playerPos });
   setBanner('撿到球了！', game.playerPos === '1B'
     ? '可自踩一壘，或按 一 / 二 / 三 / 本 傳球！'
     : (POS_MAP[game.playerPos].isIF
@@ -1495,6 +1521,7 @@ function throwBallFromCF(manualBase = 0, forceCutoff = false) {
   pl.throwDelay = 0.22;
   pl.fielderRef = null;
   pl.pendingFromPlayer = true;
+  if (mp.active) mp.socket.emit('game_event', { type: 'throw', pos: game.playerPos, manualBase, forceCutoff });
 
   if (forceCutoff || manualBase === 0) {
     const cutoff = getCutoffFielder(player.pos);
@@ -1547,6 +1574,7 @@ function addOuts(count, msg) {
   game.outs += count;
   setTicker(msg);
   if (game.outs >= 3) {
+    const wasMyAtBat = isPlayerOffense() && getMyOrder() === game.playerOrder && !game.play;
     game.outs = 0; game.balls = 0; game.strikes = 0;
     game.bases = [false, false, false];
     game.playerBase = 0;
@@ -1568,6 +1596,16 @@ function addOuts(count, msg) {
     game.timer = 2.2;
     hideAllActionUI();
     updateGameUI();
+    if (mp.active && mp.role === 'guest' && wasMyAtBat) {
+      mp.socket.emit('game_event', {
+        type: 'bat_sync',
+        inning: game.inning, half: game.half,
+        awayScore: game.awayScore, homeScore: game.homeScore,
+        balls: game.balls, strikes: game.strikes, outs: game.outs,
+        bases: game.bases, awayOrder: game.awayOrder, homeOrder: game.homeOrder,
+        ticker: ticker.textContent, bannerT: bannerTitle.textContent, bannerS: bannerSub.textContent, sec: 2.2
+      });
+    }
     return true;
   }
   return false;
@@ -1576,6 +1614,7 @@ function addOut(msg) { return addOuts(1, msg); }
 
 function endFullGame() {
   game.active = false; game.subPhase = 'OVER';
+  if (mp.active && mp.role === 'host' && mp.socket) mp.socket.emit('end_match');
   hideAllActionUI(); clearLiveRunners();
   const myScore = game.playerSide === 'home' ? game.homeScore : game.awayScore;
   const oppScore = game.playerSide === 'home' ? game.awayScore : game.homeScore;
@@ -1608,13 +1647,25 @@ function hideAllActionUI() {
   document.getElementById('run-ret-1').classList.remove('alert');
 }
 
-function startGameMode() {
+function startGameMode(fromNet = false, netCfg = null) {
+  if (!fromNet && mp.active && mp.role === 'guest') {
+    if (mp.roomStarted) {
+      setBanner('正在加入比賽...', '同步目前局數與比數中');
+      mp.socket.emit('join_match', getCurrentSetup());
+    } else {
+      setBanner('等待房主開賽', '由 P1（房主）按下 PLAY BALL！');
+    }
+    return;
+  }
   resultCard.style.display = 'none'; startWrap.style.display = 'none';
   game.active = true;
   game.playerPos = document.getElementById('sel-pos').value;
   game.playerOrder = parseInt(document.getElementById('sel-order').value, 10);
   game.playerHand = document.getElementById('sel-hand').value;
-  game.playerSide = game.playerSide === 'home' ? 'away' : 'home';
+  game.playerSide = netCfg ? netCfg.playerSide : (game.playerSide === 'home' ? 'away' : 'home');
+  if (!fromNet && mp.active && mp.role === 'host') {
+    mp.socket.emit('start_game', { playerSide: game.playerSide });
+  }
   game.inning = 1; game.half = 'top';
   game.awayScore = 0; game.homeScore = 0;
   game.balls = 0; game.strikes = 0; game.outs = 0;
@@ -1632,11 +1683,18 @@ function startGameMode() {
 }
 
 function enterCurrentRole() {
+  if (mp.holdPeerUntilNextRole) {
+    mp.holdPeerUntilNextRole = false;
+    mp.peerPos = mp.latestPeerPos;
+    mp.peerOrder = mp.latestPeerOrder;
+  }
   hideAllActionUI();
   clearLiveRunners();
   game.play = null;
   game.pickoff = null;
   game.steal = null;
+  mp.peerRunner = null;
+  if (isPlayerDefense()) mp.peerBase = 0;
   document.getElementById('run-ret-1').classList.remove('alert');
   player.hasBall = false;
   ballMesh.visible = false; ballShadow.visible = false;
@@ -1692,6 +1750,15 @@ function enterCurrentRole() {
       setTicker(isOnDeck ? '打擊準備區熱身中（下一棒就是你！）' : `休息室觀戰｜我方 ${getMyOrder()} 棒打擊中`);
     }
   }
+  if (mp.active && mp.role === 'host') {
+    mp.socket.emit('game_event', {
+      type: 'enter_role',
+      inning: game.inning, half: game.half,
+      awayScore: game.awayScore, homeScore: game.homeScore,
+      balls: game.balls, strikes: game.strikes, outs: game.outs,
+      bases: game.bases, awayOrder: game.awayOrder, homeOrder: game.homeOrder
+    });
+  }
   updateGameUI();
 }
 
@@ -1701,26 +1768,51 @@ function pickPitchType() {
   return { pt, kmh };
 }
 
-function launchSimPitch(isDefense) {
+function launchSimPitch(isDefense, netData = null) {
   game.subPhase = isDefense ? 'DEF_PITCH' : 'OFF_SIM_PITCH';
   state.pitchT = 0;
-  const picked = pickPitchType();
-  game.pitchType = picked.pt;
-  game.pitchKmh = picked.kmh;
+  let stealData = null;
+  if (netData) {
+    game.pitchType = PITCH_TYPES[netData.ptIdx];
+    game.pitchKmh = netData.kmh;
+    game.simResult = netData.simResult;
+    game.foulData = netData.foulData || null;
+    game.pitchDur = netData.dur || game.pitchType.dur;
+    stealData = netData.stealData || null;
+  } else {
+    const ptIdx = Math.floor(Math.random() * PITCH_TYPES.length);
+    const pt = PITCH_TYPES[ptIdx];
+    game.pitchType = pt;
+    game.pitchKmh = Math.round(pt.minKmh + Math.random() * (pt.maxKmh - pt.minKmh));
+    const r = Math.random();
+    if (r < 0.36) game.simResult = 'BALL';
+    else if (r < 0.51) game.simResult = 'STRIKE_LOOK';
+    else if (r < 0.61) game.simResult = 'STRIKE_SWING';
+    else if (r < 0.69) game.simResult = 'FOUL_FLY';
+    else if (r < 0.76) game.simResult = 'FOUL_GROUND';
+    else game.simResult = 'IN_PLAY';
+    let foulData = null;
+    if (game.simResult === 'FOUL_GROUND') {
+      foulData = { ev: 30, la: 4, spray: (Math.random() > 0.5 ? 1 : -1) * (54 + Math.random() * 18), label: '滾地界外' };
+    } else if (game.simResult === 'FOUL_FLY') {
+      const dirRoll = Math.random();
+      if (dirRoll < 0.35) foulData = { ev: 22 + Math.random() * 8, la: 50 + Math.random() * 20, spray: 165 + Math.random() * 30, label: '本壘後方界外飛球' };
+      else if (dirRoll < 0.68) foulData = { ev: 26 + Math.random() * 8, la: 42 + Math.random() * 20, spray: Math.random() > 0.5 ? (110 + Math.random() * 45) : (205 + Math.random() * 45), label: '斜後方界外飛球' };
+      else foulData = { ev: 32, la: 34 + Math.random() * 14, spray: (Math.random() > 0.5 ? 1 : -1) * (54 + Math.random() * 22), label: '界外飛球' };
+    }
+    game.foulData = foulData;
+    if (!game.steal && (!isPlayerOffense() || (game.playerBase === 0 && mp.peerBase === 0))) {
+      if (game.bases[0] && !game.bases[1] && Math.random() < 0.045) stealData = { fromBase: 1, speed: 0.49 + Math.random() * 0.10 };
+      else if (game.bases[1] && !game.bases[2] && Math.random() < 0.015) stealData = { fromBase: 2, speed: 0.51 + Math.random() * 0.10 };
+    }
+    if (mp.active && mp.role === 'host') {
+      mp.socket.emit('game_event', { type: 'pitch', isDefense, ptIdx, kmh: game.pitchKmh, simResult: game.simResult, foulData, stealData });
+    }
+  }
   ballMesh.visible = true;
   ballMesh.position.set(0, 1.85, 18.44);
-
-  const r = Math.random();
-  if (r < 0.36) game.simResult = 'BALL';
-  else if (r < 0.51) game.simResult = 'STRIKE_LOOK';
-  else if (r < 0.61) game.simResult = 'STRIKE_SWING';
-  else if (r < 0.69) game.simResult = 'FOUL_FLY';
-  else if (r < 0.76) game.simResult = 'FOUL_GROUND';
-  else game.simResult = 'IN_PLAY';
-
-  if (!game.steal && (!isPlayerOffense() || game.playerBase === 0)) {
-    if (game.bases[0] && !game.bases[1] && Math.random() < 0.045) startStealRun(1, false);
-    else if (game.bases[1] && !game.bases[2] && Math.random() < 0.015) startStealRun(2, false);
+  if (stealData && !game.steal) {
+    startStealRun(stealData.fromBase, false, stealData.speed);
   }
 }
 
@@ -1843,21 +1935,23 @@ function spawnLiveRunners(isMeBatting) {
   for (let i = 2; i >= 0; i--) {
     if (game.bases[i]) {
       const isMe = (isPlayerOffense() && game.playerBase === i + 1);
+      const isPeer = !isMe && mp.active && isPlayerOffense() && mp.peerBase === i + 1;
       const isForced = (i === 0) || (i === 1 && game.bases[0]) || (i === 2 && game.bases[0] && game.bases[1]);
       const m = createPlayerSilhouette(BASES[i + 1].x, BASES[i + 1].z, color);
       if (isMe) m.visible = false;
       liveRunners.push({
         mesh: m, startBase: i + 1, baseFrom: i + 1, baseTo: i + 2, progress: 0,
-        speed: 0.29 + Math.random() * 0.03, isBatter: false, isMe,
+        speed: mp.active ? 0.30 : (0.29 + Math.random() * 0.03), isBatter: false, isMe, isPeer,
         isForced, leftEarly: false, out: false, scored: false, stopped: false, retreating: false
       });
     }
   }
   const bm = createPlayerSilhouette(0, 0, color);
   if (isMeBatting) bm.visible = false;
+  const isPeerBat = !isMeBatting && mp.active && isPlayerOffense() && getMyOrder() === mp.peerOrder;
   liveRunners.push({
     mesh: bm, startBase: 0, baseFrom: 0, baseTo: 1, progress: 0,
-    speed: 0.26, isBatter: true, isMe: isMeBatting,
+    speed: 0.26, isBatter: true, isMe: isMeBatting, isPeer: isPeerBat,
     isForced: true, leftEarly: false, out: false, scored: false, stopped: false, retreating: false
   });
   syncStaticRunners();
@@ -1874,6 +1968,7 @@ function startLiveBallInPlay(ev, la, spray, spin, isMeBatting = false, tag = '')
     landingRing.visible = true;
   }
 
+  mp.peerRunner = null;
   spawnLiveRunners(isMeBatting);
   batterMesh.visible = false;
   holdRun = false;
@@ -1902,27 +1997,37 @@ function startLiveBallInPlay(ev, la, spray, spin, isMeBatting = false, tag = '')
   updateRunPadUI();
 }
 
-function launchFoulFly(pInfo) {
+function launchFoulFly(pInfo, fd = null) {
   AudioFX.crack(0.68);
   if (game.strikes < 2) game.strikes++;
-  const dirRoll = Math.random();
   let spray, la, ev, label;
-  if (dirRoll < 0.35) {
-    spray = 165 + Math.random() * 30; la = 50 + Math.random() * 20; ev = 22 + Math.random() * 8;
-    label = '本壘後方界外飛球';
-  } else if (dirRoll < 0.68) {
-    spray = Math.random() > 0.5 ? (110 + Math.random() * 45) : (205 + Math.random() * 45);
-    la = 42 + Math.random() * 20; ev = 26 + Math.random() * 8;
-    label = '斜後方界外飛球';
+  if (fd) {
+    ({ ev, la, spray, label } = fd);
   } else {
-    spray = (Math.random() > 0.5 ? 1 : -1) * (54 + Math.random() * 22);
-    la = 34 + Math.random() * 14; ev = 32;
-    label = '界外飛球';
+    const dirRoll = Math.random();
+    if (dirRoll < 0.35) {
+      spray = 165 + Math.random() * 30; la = 50 + Math.random() * 20; ev = 22 + Math.random() * 8;
+      label = '本壘後方界外飛球';
+    } else if (dirRoll < 0.68) {
+      spray = Math.random() > 0.5 ? (110 + Math.random() * 45) : (205 + Math.random() * 45);
+      la = 42 + Math.random() * 20; ev = 26 + Math.random() * 8;
+      label = '斜後方界外飛球';
+    } else {
+      spray = (Math.random() > 0.5 ? 1 : -1) * (54 + Math.random() * 22);
+      la = 34 + Math.random() * 14; ev = 32;
+      label = '界外飛球';
+    }
   }
   setTicker(`${pInfo}${label}（${game.balls}壞${game.strikes}好）`);
   launchVisualBall(ev, la, spray, 0.5);
   game.subPhase = 'WATCH_FOUL';
   game.timer = 1.4 / state.speed;
+  if (!fd && mp.active) {
+    mp.socket.emit('game_event', {
+      type: 'bat_foul', ev, la, spray,
+      balls: game.balls, strikes: game.strikes, ticker: ticker.textContent
+    });
+  }
 }
 
 function startCatcherStealThrow() {
@@ -1942,6 +2047,7 @@ function startCatcherStealThrow() {
 }
 
 function resolveSimPitch(isDefense) {
+  if (game.simResult === 'WAIT_BATTER') return;
   const res = game.simResult;
   const pInfo = `${game.pitchType.name} ${game.pitchKmh}km/h｜`;
 
@@ -1980,16 +2086,21 @@ function resolveSimPitch(isDefense) {
       enterAfterPause(0.95);
     }
   } else if (res === 'FOUL_FLY') {
-    launchFoulFly(pInfo);
+    launchFoulFly(pInfo, game.foulData);
   } else if (res === 'FOUL_GROUND') {
     AudioFX.crack(0.7);
     if (game.strikes < 2) game.strikes++;
     setTicker(`${pInfo}滾地界外（${game.balls}壞${game.strikes}好）`);
-    launchVisualBall(30, 4, (Math.random() > 0.5 ? 1 : -1) * (54 + Math.random() * 18), 0.4);
+    const fd = game.foulData || { ev: 30, la: 4, spray: (Math.random() > 0.5 ? 1 : -1) * (54 + Math.random() * 18) };
+    launchVisualBall(fd.ev, fd.la, fd.spray, 0.4);
     game.subPhase = 'WATCH_FOUL';
     game.timer = 1.35 / state.speed;
   } else {
+    if (mp.active && mp.role === 'guest') return;
     const p = generateBattedBallParams();
+    if (mp.active && mp.role === 'host') {
+      mp.socket.emit('game_event', { type: 'in_play', ev: p.ev, la: p.la, spray: p.spray, spin: p.spin, tag: p.tag });
+    }
     startLiveBallInPlay(p.ev, p.la, p.spray, p.spin, false, p.tag);
   }
   updateGameUI();
@@ -2025,8 +2136,19 @@ function launchVisualBall(ev, laDeg, sprayDeg, spin) {
 }
 
 function enterAfterPause(sec) {
+  const wasMyAtBat = (game.subPhase === 'BAT_PITCH' || game.subPhase === 'BAT_WAIT');
   game.subPhase = 'PAUSE_NEXT';
   game.timer = sec / state.speed;
+  if (mp.active && mp.role === 'guest' && wasMyAtBat) {
+    mp.socket.emit('game_event', {
+      type: 'bat_sync',
+      inning: game.inning, half: game.half,
+      awayScore: game.awayScore, homeScore: game.homeScore,
+      balls: game.balls, strikes: game.strikes, outs: game.outs,
+      bases: game.bases, awayOrder: game.awayOrder, homeOrder: game.homeOrder,
+      ticker: ticker.textContent, bannerT: bannerTitle.textContent, bannerS: bannerSub.textContent, sec
+    });
+  }
   updateGameUI();
 }
 
@@ -2079,6 +2201,8 @@ function updateFieldersAndCoverage(dt) {
       let bestIF = Infinity, bestOF = Infinity;
       fielders.forEach(f => {
         if (!f.mesh.visible || f.stunTimer > 0) return;
+        if (mp.active && isPlayerDefense() && f.id === mp.peerPos) return;
+        
         const d = Math.hypot(state.meta.land.x - f.pos.x, state.meta.land.z - f.pos.z);
         if (f.type === 'IF' && d < 28 && d < bestIF) { bestIF = d; bloopIF = f; }
         if (f.type === 'OF' && d < 42 && d < bestOF) { bestOF = d; bloopOF = f; }
@@ -2093,6 +2217,7 @@ function updateFieldersAndCoverage(dt) {
         let bestIFDist = Infinity;
         fielders.forEach(f => {
           if (!f.mesh.visible || f.type !== 'IF' || f.stunTimer > 0) return;
+          if (mp.active && isPlayerDefense() && f.id === mp.peerPos) return;
           if (isPlayer1B && pl.tag === '軟弱滾地' && pl.spray < -12 && f.id === '2B') return;
           const rx = f.home.x - state.ballPos.x, rz = f.home.z - state.ballPos.z;
           const proj = rx * dirX + rz * dirZ;
@@ -2129,6 +2254,7 @@ function updateFieldersAndCoverage(dt) {
         let bestDist = Infinity;
         fielders.forEach(f => {
           if (!f.mesh.visible || f.stunTimer > 0) return;
+         if (mp.active && isPlayerDefense() && f.id === mp.peerPos) return;
           if (pl.tag === '車布邊' && f.type === 'IF') return;
           const t = (!pl.landed && (f.type === 'OF' || pl.la > 18)) ? state.meta.land : state.ballPos;
           const isCornerIF = f.id === '1B' || f.id === '3B';
@@ -2192,6 +2318,12 @@ function updateFieldersAndCoverage(dt) {
 
   fielders.forEach(f => {
     if (!f.mesh.visible || f.stunTimer > 0) return;
+    if (mp.active && isPlayerDefense() && f.id === mp.peerPos && mp.hasPeerPos) {
+      f.pos.x = THREE.MathUtils.lerp(f.pos.x, mp.peerX, Math.min(1, dt * 16));
+      f.pos.z = THREE.MathUtils.lerp(f.pos.z, mp.peerZ, Math.min(1, dt * 16));
+      f.mesh.position.set(f.pos.x, 0, f.pos.z);
+      return;
+    }
     if (f === pl.fielderRef && pl.throwDelay > 0) return;
 
     if (pl.selfCoverBase && f === pl.fielderRef) {
@@ -2393,6 +2525,7 @@ function updateLivePlay(dt, now) {
 
     fielders.forEach(f => {
       if (!f.mesh.visible || pl.fielded || f.stunTimer > 0) return;
+      if (mp.active && isPlayerDefense() && f.id === mp.peerPos) return;
       const bDist = Math.hypot(state.ballPos.x - f.pos.x, state.ballPos.z - f.pos.z);
       if (!pl.landed && bDist <= f.reach && state.ballPos.y <= 2.6 && state.ballPos.y >= 0.15 && state.ballVel.y < 0) {
         handleFlyOut(f.id, false);
@@ -2423,6 +2556,7 @@ function updateLivePlay(dt, now) {
           pl.throwTargetBase = stepBase;
           pl.throwTargetFielder = { id: `${game.playerPos}(你)`, pos: player.pos, isPlayer: true, steppedBag: true };
           player.hasBall = false;
+          if (mp.active) mp.socket.emit('game_event', { type: 'step_bag', pos: game.playerPos, base: stepBase });
           resolveThrowArrival();
           return;
         }
@@ -2432,7 +2566,8 @@ function updateLivePlay(dt, now) {
     ballMesh.position.set(pl.fielderRef.pos.x, 1.35, pl.fielderRef.pos.z);
     ballShadow.position.set(ballMesh.position.x, 0.07, ballMesh.position.z);
     const bPos = BASES[pl.selfCoverBase % 4];
-    if (Math.hypot(pl.fielderRef.pos.x - bPos.x, pl.fielderRef.pos.z - bPos.z) < 0.65) {
+    const coverReach = (mp.active && isPlayerDefense() && pl.fielderRef.id === mp.peerPos) ? 1.35 : 0.65;
+    if (Math.hypot(pl.fielderRef.pos.x - bPos.x, pl.fielderRef.pos.z - bPos.z) < coverReach) {
       AudioFX.glovePop();
       const tb = pl.selfCoverBase;
       pl.selfCoverBase = 0;
@@ -2478,6 +2613,40 @@ function updateLivePlay(dt, now) {
   let anyMoving = false;
   liveRunners.forEach((r, idx) => {
     if (r.out || r.scored) return;
+    if (r.isPeer) {
+      const pr = mp.peerRunner;
+      if (pr && pr.startBase === r.startBase) {
+        const baseChanged = pr.baseFrom !== r.baseFrom || pr.baseTo !== r.baseTo;
+        r.baseFrom = pr.baseFrom;
+        r.baseTo = pr.baseTo;
+        r.retreating = pr.retreating;
+        r.stopped = pr.stopped;
+        r.leftEarly = pr.leftEarly;
+        if (pr.out && !r.out) { r.out = true; r.mesh.visible = false; return; }
+        if (pr.scored && !r.scored) {
+          r.scored = true; r.mesh.visible = false;
+          if (pl.landed || pl.isHR || (pl.flyCaught && game.outs + 1 < 3)) {
+            addRuns(1);
+            pl.runsAdded = (pl.runsAdded || 0) + 1;
+            if (pl.isMeBatting) { game.stats.rbi++; pl.rbiAdded = (pl.rbiAdded || 0) + 1; }
+            AudioFX.tone(660, 0.15);
+            updateGameUI();
+          } else {
+            r.pendingScore = true;
+          }
+          return;
+        }
+       if (baseChanged || Math.abs(pr.progress - r.progress) > 0.35) r.progress = pr.progress;
+        else r.progress = THREE.MathUtils.lerp(r.progress, pr.progress, Math.min(1, dt * 16));
+      } else if (!r.stopped && (r.isBatter || r.isForced)) {
+        r.progress = Math.min(1, r.progress + r.speed * dt);
+      }
+      const cur = new THREE.Vector3().lerpVectors(BASES[r.baseFrom % 4], BASES[r.baseTo % 4], Math.min(1, Math.max(0, r.progress)));
+      cur.y = !r.stopped ? Math.abs(Math.sin(now * 0.018)) * 0.14 : 0;
+      r.mesh.position.copy(cur);
+      if (!r.stopped) anyMoving = true;
+      return;
+    }
 
     if (r.startBase === undefined) r.startBase = r.baseFrom;
     const isAirFly = !pl.isHR && game.outs < 2 && !pl.landed && !pl.flyCaught && pl.la > 8;
@@ -2770,6 +2939,7 @@ function handleFlyOut(fielderId, isPlayerCF) {
   }
   AudioFX.glovePop();
   if (isPlayerCF) { AudioFX.cheer(); game.stats.po++; }
+  if (isPlayerCF && mp.active) mp.socket.emit('game_event', { type: 'fly_out', pos: game.playerPos });
   landingRing.visible = false;
   updateDiveBtnState();
 
@@ -3027,8 +3197,9 @@ function resolveThrowArrival() {
       return;
     }
   } else if (cover && !cover.isCatcher && !cover.isPlayer && tb >= 1 && tb <= 3) {
+    const isPeerCover = mp.active && isPlayerDefense() && cover.id === mp.peerPos;
     const distToBag = Math.hypot(cover.pos.x - BASES[tb % 4].x, cover.pos.z - BASES[tb % 4].z);
-    if (distToBag > 1.2) {
+    if (distToBag > (isPeerCover ? 1.5 : 1.2)) {
       pl.fielderRef = cover;
       pl.selfCoverBase = tb;
       const bName = ['本', '一', '二', '三', '本'][tb];
@@ -3036,6 +3207,8 @@ function resolveThrowArrival() {
       return;
     }
   }
+  pl.steppedBases = pl.steppedBases || {};
+  pl.steppedBases[tb] = true;
 
   let gotOut = false;
   let gotForceOut = false;
@@ -3063,6 +3236,9 @@ function resolveThrowArrival() {
     pl.lastOutWasForce = gotForceOut;
   }
 
+  if (cover && cover.isPlayer && !cover.steppedBag && mp.active) {
+    mp.socket.emit('game_event', { type: 'step_bag', pos: game.playerPos, base: tb });
+  }
   const totalOutsNow = game.outs + liveRunners.filter(r => r.out).length;
   if (totalOutsNow >= 3) {
     finalizeLivePlay(pl.lastGotOut, pl.lastOutBase || tb);
@@ -3081,6 +3257,16 @@ function resolveThrowArrival() {
     return;
   }
 
+  if (cover && !cover.isPlayer && mp.active && isPlayerDefense() && cover.id === mp.peerPos) {
+    pl.dpSecondThrow = false;
+    pl.dpCoverDone = true;
+    pl.fielderRef = cover;
+    pl.waitingEnd = true;
+    pl.endCooldown = 1.5;
+    const bName = ['本', '一', '二', '三', '本'][tb];
+    setTicker(gotOut ? `${cover.id}(隊友) ${bName}壘封殺！` : `${cover.id}(隊友) 接到傳球！`);
+    return;
+  }
   if (pl.dpSecondThrow && tb === 2 && gotOut) {
     pl.dpSecondThrow = false;
     const cover2B = (cover && !cover.isPlayer) ? cover : getFielderById((pl.fielderId === 'SS' || pl.fielderId === '3B') ? '2B' : 'SS');
@@ -3154,6 +3340,17 @@ function finishLivePlayHR() {
 function finalizeLivePlay(gotOut = false, outBase = 1) {
   const pl = game.play;
   if (!pl || pl.resolved) return;
+  if (mp.active && isPlayerOffense()) {
+    const mr = liveRunners.find(r => r.isMe);
+    if (mr) {
+      mp.socket.emit('player_move', {
+        kind: 'runner', startBase: mr.startBase,
+        baseFrom: mr.baseFrom, baseTo: mr.baseTo, progress: mr.progress,
+        retreating: false, stopped: true, leftEarly: mr.leftEarly,
+        out: mr.out, scored: mr.scored
+      });
+    }
+  }
   pl.resolved = true;
   btnRun.style.display = 'none';
   landingRing.visible = false;
@@ -3223,10 +3420,14 @@ function launchPlayerAtBatPitch() {
   game.subPhase = 'BAT_PITCH';
   game.pitchSwung = false;
   state.pitchT = 0;
-  const picked = pickPitchType();
-  game.pitchType = picked.pt;
-  game.pitchKmh = picked.kmh;
-  game.pitchDur = picked.pt.dur + (Math.random() * 0.04 - 0.02);
+  const ptIdx = Math.floor(Math.random() * PITCH_TYPES.length);
+  const pt = PITCH_TYPES[ptIdx];
+  game.pitchType = pt;
+  game.pitchKmh = Math.round(pt.minKmh + Math.random() * (pt.maxKmh - pt.minKmh));
+  game.pitchDur = pt.dur + (Math.random() * 0.04 - 0.02);
+  if (mp.active) {
+    mp.socket.emit('game_event', { type: 'pitch', isDefense: false, ptIdx, kmh: game.pitchKmh, dur: game.pitchDur, simResult: 'WAIT_BATTER' });
+  }
 
   const isStrike = Math.random() < 0.54;
   game.pitchIsStrike = isStrike;
@@ -3265,12 +3466,19 @@ function swingBat() {
         launchVisualBall(ev * 0.8, la, spray, 0.5);
         game.subPhase = 'WATCH_FOUL';
         game.timer = 1.3;
+        if (mp.active) {
+          mp.socket.emit('game_event', {
+            type: 'bat_foul', ev: ev * 0.8, la, spray,
+            balls: game.balls, strikes: game.strikes, ticker: ticker.textContent
+          });
+        }
       } else {
         launchFoulFly(pInfo);
       }
     } else {
       game.stats.ab++;
       const tag = (Math.abs(spray) > 40 && la < 10) ? '車布邊' : '';
+      if (mp.active) mp.socket.emit('game_event', { type: 'in_play', ev, la, spray, spin: 1.0, tag });
       startLiveBallInPlay(ev, la, spray, 1.0, true, tag);
     }
     updateGameUI();
@@ -3295,20 +3503,31 @@ function attemptSteal() {
   if (game.subPhase !== 'OFF_SIM_WAIT' && game.subPhase !== 'OFF_SIM_PITCH') return;
   if (game.playerBase <= 0 || game.playerBase >= 3 || game.bases[game.playerBase]) return;
   if (game.steal) return;
+  if (mp.active && getMyOrder() === mp.peerOrder) {
+    setTicker('隊友正在打擊中，先等他打完這球！');
+    return;
+  }
 
+  const spd = game.playerBase === 1 ? (0.49 + Math.random() * 0.10) : (0.51 + Math.random() * 0.10);
   if (game.subPhase === 'OFF_SIM_WAIT') {
     if (game.playerBase === 1 && Math.random() < 0.72) {
       startPickoff(true);
       return;
     }
-    startStealRun(game.playerBase, true);
-    launchSimPitch(false);
+    startStealRun(game.playerBase, true, spd);
+    if (mp.active) {
+      mp.socket.emit('game_event', { type: 'steal_start', fromBase: game.playerBase, speed: spd, needPitch: mp.role === 'guest' });
+    }
+    if (!mp.active || mp.role === 'host') launchSimPitch(false);
     return;
   }
-  startStealRun(game.playerBase, true);
+  startStealRun(game.playerBase, true, spd);
+  if (mp.active) {
+    mp.socket.emit('game_event', { type: 'steal_start', fromBase: game.playerBase, speed: spd, needPitch: false });
+  }
 }
 
-function startStealRun(fromBase, isMe) {
+function startStealRun(fromBase, isMe, netSpeed = null) {
   const color = isPlayerDefense() ? 0xc62828 : 0x1565c0;
   let mesh = null;
   if (!isMe) {
@@ -3317,7 +3536,7 @@ function startStealRun(fromBase, isMe) {
   game.steal = {
     fromBase, toBase: fromBase + 1, isMe, mesh,
     prog: fromBase === 1 ? 0.20 : 0.16,
-    speed: fromBase === 1 ? (0.49 + Math.random() * 0.10) : (0.51 + Math.random() * 0.10),
+    speed: netSpeed || (fromBase === 1 ? (0.49 + Math.random() * 0.10) : (0.51 + Math.random() * 0.10)),
     stage: 'PITCHING',
     throwFrom: null, throwTo: null, throwT: 0, throwDur: fromBase === 1 ? 0.50 : 0.38, popTimer: 0,
     tagTimer: 0
@@ -3336,13 +3555,22 @@ function startStealRun(fromBase, isMe) {
   AudioFX.tone(540, 0.1);
 }
 
-function startPickoff(jumpedEarly = false) {
+function startPickoff(jumpedEarly = false, netData = null) {
   const isMeRunner = isPlayerOffense() && game.playerBase === 1;
+  const isPeerRunner = mp.active && isPlayerOffense() && mp.peerBase === 1;
   const isMe1B = isPlayerFielding() && game.playerPos === '1B';
+  const isPeer1B = mp.active && isPlayerFielding() && mp.peerPos === '1B';
   const color = isPlayerDefense() ? 0xc62828 : 0x1565c0;
   const rMesh = isMeRunner ? null : createPlayerSilhouette(BASES[1].x, BASES[1].z, color);
   const f1B = getFielderById('1B');
   const target1B = isMe1B ? player.pos.clone().setY(1.35) : (f1B ? f1B.pos.clone().setY(1.35) : BASES[1].clone().setY(1.35));
+  const runnerState = netData
+    ? netData.runnerState
+    : (jumpedEarly ? 'BREAK' : ((isMeRunner || isPeerRunner) ? 'LEAD' : (Math.random() < 0.08 && !game.bases[1] ? 'BREAK' : 'BACK')));
+
+  if (!netData && mp.active) {
+    mp.socket.emit('game_event', { type: 'pickoff', jumpedEarly, runnerState });
+  }
 
   game.pickoff = {
     stage: 'TO_1B',
@@ -3350,9 +3578,9 @@ function startPickoff(jumpedEarly = false) {
     throwFrom: new THREE.Vector3(0, 1.7, 18.44),
     throwTo: target1B,
     runnerProg: jumpedEarly ? 0.26 : 0.20,
-    runnerState: jumpedEarly ? 'BREAK' : (isMeRunner ? 'LEAD' : (Math.random() < 0.08 && !game.bases[1] ? 'BREAK' : 'BACK')),
+    runnerState,
     runnerMesh: rMesh,
-    isMeRunner, isMe1B,
+    isMeRunner, isPeerRunner, isMe1B, isPeer1B,
     tagTimer: 0, holdTimer: 0
   };
   game.subPhase = 'PICKOFF';
@@ -3375,26 +3603,30 @@ function startPickoff(jumpedEarly = false) {
   }
 }
 
-function handlePickoff1BAction(mode) {
+function handlePickoff1BAction(mode, fromNet = false) {
   const pk = game.pickoff;
-  if (!pk || !pk.isMe1B || pk.stage !== 'HOLD_1B') return;
+  if (!pk || pk.stage !== 'HOLD_1B') return;
+  if (!fromNet && !pk.isMe1B) return;
+  if (!fromNet && mp.active) mp.socket.emit('game_event', { type: 'pickoff_1b', mode });
+  const f1B = getFielderById('1B');
+  const fromPos = pk.isMe1B ? player.pos.clone().setY(1.4) : (f1B ? f1B.pos.clone().setY(1.4) : BASES[1].clone().setY(1.4));
   if (mode === 2) {
-    const cover2B = getBaseCoverFielder(2, 'PLAYER');
+    const cover2B = getBaseCoverFielder(2, pk.isMe1B ? 'PLAYER' : '1B');
     pk.stage = 'TO_2B';
     pk.t = 0;
     pk.dur = 0.56;
-    pk.throwFrom = player.pos.clone().setY(1.4);
+    pk.throwFrom = fromPos;
     pk.throwTo = cover2B ? cover2B.pos.clone().setY(1.35) : BASES[2].clone().setY(1.35);
-    setBanner('傳二壘！', '抓觸殺！');
-    setTicker('1B(你) 轉傳二壘抓盜壘跑者！');
+    if (pk.isMe1B) setBanner('傳二壘！', '抓觸殺！');
+    setTicker('1B 轉傳二壘抓盜壘跑者！');
   } else {
     pk.stage = 'TO_P';
     pk.t = 0;
     pk.dur = 0.45;
-    pk.throwFrom = player.pos.clone().setY(1.4);
+    pk.throwFrom = fromPos;
     pk.throwTo = new THREE.Vector3(0, 1.5, 18.44);
-    setBanner('回傳投手', '');
-    setTicker('1B(你) 將球回傳給投手');
+    if (pk.isMe1B) setBanner('回傳投手', '');
+    setTicker('1B 將球回傳給投手');
   }
   updateDiveBtnState();
 }
@@ -3424,12 +3656,13 @@ function updatePickoff(dt, now) {
   }
 
   const f2B = getFielderById('2B'), fSS = getFielderById('SS');
-  if (pk.runnerState === 'BREAK' && fSS && fSS.mesh.visible) moveObjToward(fSS.pos, BASES[2], fSS.speed, dt);
+  const peerIsSS = mp.active && isPlayerDefense() && mp.peerPos === 'SS';
+  if (pk.runnerState === 'BREAK' && fSS && fSS.mesh.visible && !peerIsSS) moveObjToward(fSS.pos, BASES[2], fSS.speed, dt);
   if (pk.runnerState === 'BREAK' && f2B && f2B.mesh.visible) moveObjToward(f2B.pos, BASES[2], f2B.speed, dt);
-  if (fSS) fSS.mesh.position.set(fSS.pos.x, 0, fSS.pos.z);
+  if (fSS && !peerIsSS) fSS.mesh.position.set(fSS.pos.x, 0, fSS.pos.z);
   if (f2B) f2B.mesh.position.set(f2B.pos.x, 0, f2B.pos.z);
+  if (isPlayerFielding()) updateCFMovement(dt, now);
   if (pk.isMe1B) {
-    updateCFMovement(dt, now);
     lookTarget.lerp(pk.stage === 'HOLD_1B' ? (pk.runnerState === 'BREAK' ? BASES[2].clone().setY(1.2) : new THREE.Vector3(0, 1.4, 18.44)) : ballMesh.position, 0.2);
     camera.lookAt(lookTarget);
   } else if (!pk.isMeRunner) {
@@ -3464,6 +3697,10 @@ function updatePickoff(dt, now) {
         pk.holdTimer = 3.5;
         setBanner(pk.runnerState === 'BREAK' ? '跑者起跑了！' : '跑者回壘安全', pk.runnerState === 'BREAK' ? '快按 二（或 2）傳二壘抓觸殺！' : '按中間鈕（或 Space）回傳投手');
         updateDiveBtnState();
+        } else if (pk.isPeer1B) {
+        pk.stage = 'HOLD_1B';
+        pk.holdTimer = 4.5;
+        setTicker('1B(隊友) 接到牽制球！');
       } else if (pk.runnerState === 'BREAK') {
         const cover2B = getBaseCoverFielder(2, '1B');
         pk.stage = 'TO_2B';
@@ -3479,9 +3716,14 @@ function updatePickoff(dt, now) {
       }
     }
   } else if (pk.stage === 'HOLD_1B') {
-    ballMesh.position.set(player.pos.x, 1.0, player.pos.z);
-    pk.holdTimer -= dt;
-    if (pk.holdTimer <= 0) handlePickoff1BAction(0);
+    const f1B = getFielderById('1B');
+    if (pk.isMe1B) {
+      ballMesh.position.set(player.pos.x, 1.0, player.pos.z);
+      pk.holdTimer -= dt;
+      if (pk.holdTimer <= 0) handlePickoff1BAction(0);
+    } else if (f1B) {
+      ballMesh.position.set(f1B.pos.x, 1.35, f1B.pos.z);
+    }
   } else if (pk.stage === 'TO_P') {
     pk.t += dt;
     const p = Math.min(1, pk.t / pk.dur);
@@ -3546,7 +3788,8 @@ function updateStealThrow(dt, now) {
 
   if (st.toBase === 2) {
     const fSS = getFielderById('SS'), f2B = getFielderById('2B');
-    if (fSS && fSS.mesh.visible) {
+    const peerIsSS = mp.active && isPlayerDefense() && mp.peerPos === 'SS';
+    if (fSS && fSS.mesh.visible && !peerIsSS) {
       moveObjToward(fSS.pos, BASES[2], fSS.speed, dt);
       fSS.mesh.position.set(fSS.pos.x, 0, fSS.pos.z);
     }
@@ -3589,8 +3832,11 @@ function updateStealThrow(dt, now) {
   } else if (st.stage === 'TAG') {
     st.tagTimer -= dt;
     if (st.tagTimer <= 0) {
-      const ssMissedBag = isPlayerFielding() && game.playerPos === 'SS' && st.toBase === 2
-        && Math.hypot(player.pos.x - BASES[2].x, player.pos.z - BASES[2].z) > 3.2;
+      const fSSObj = getFielderById('SS');
+      const ssMissedBag = isPlayerFielding() && st.toBase === 2 && (
+        (game.playerPos === 'SS' && Math.hypot(player.pos.x - BASES[2].x, player.pos.z - BASES[2].z) > 3.2) ||
+        (mp.active && mp.peerPos === 'SS' && fSSObj && Math.hypot(fSSObj.pos.x - BASES[2].x, fSSObj.pos.z - BASES[2].z) > 3.2)
+      );
       const safe = st.prog >= 0.98 || ssMissedBag;
       player.autoRun2B = false;
       const bName = ['', '', '二', '三'][st.toBase];
@@ -3672,6 +3918,10 @@ function finishPracticePlay(outcome, title, sub, color) {
 }
 
 function switchMode(newMode) {
+  if (game.active && mp.active && mp.socket) {
+    mp.socket.emit('leave_match');
+  }
+  mp.waitingNextBall = false;
   state.mode = newMode; game.active = false; state.phase = 'IDLE';
   hideAllActionUI(); clearLiveRunners();
   resultCard.style.display = 'none'; quizControls.style.display = 'none'; startWrap.style.display = 'block';
@@ -3684,12 +3934,15 @@ function switchMode(newMode) {
   if (newMode === 'game') {
     gameBug.style.display = 'block'; practiceScore.style.display = 'none'; ticker.style.display = 'none';
     document.getElementById('setup-panel').style.display = 'block';
+    document.getElementById('mp-status').style.display = 'block';
     document.getElementById('btn-start').textContent = 'PLAY BALL！（Space）';
     updateSetupBanner();
+    updateRoomUI();
     resetPlayerCF(); updateGameUI();
   } else {
     gameBug.style.display = 'none'; practiceScore.style.display = 'flex'; ticker.style.display = 'none';
     document.getElementById('setup-panel').style.display = 'none';
+    document.getElementById('mp-status').style.display = 'none';
     document.getElementById('btn-start').textContent = '投球（Space）';
     if (newMode === 'chase') { touchControls.style.display = 'block'; setBanner('實戰追接模式', '靠視線與聲音判斷落點，跑位接殺飛球'); }
     else setBanner('這顆飛球，前？後？', '擊球後 1.15 秒瞬間判斷往前衝還是往後退');
@@ -4114,21 +4367,23 @@ function updateAllCharacterAnimations(dt, now) {
   if (state.mode === 'game' && game.active) {
     if (game.subPhase === 'CHANGE_SIDES' || game.subPhase === 'PAUSE_NEXT') {
       game.timer -= dt;
-      if (game.timer <= 0) enterCurrentRole();
+      if (game.timer <= 0 && (!mp.active || mp.role === 'host')) enterCurrentRole();
     } else if (game.subPhase === 'DEF_WAIT' || game.subPhase === 'OFF_SIM_WAIT') {
       if (game.subPhase === 'DEF_WAIT') {
         updateCFMovement(dt, now);
         lookTarget.lerp(new THREE.Vector3(0, 1.8, 0), 0.12); camera.lookAt(lookTarget);
       }
       game.timer -= dt;
-      if (game.timer <= 0) {
+      const isPeerBatting = mp.active && isPlayerOffense() && getMyOrder() === mp.peerOrder;
+      if (game.timer <= 0 && (!mp.active || mp.role === 'host') && !isPeerBatting) {
         if (game.bases[0] && Math.random() < 0.06) startPickoff(false);
         else launchSimPitch(game.subPhase === 'DEF_WAIT');
       }
     } else if (game.subPhase === 'DEF_PITCH' || game.subPhase === 'OFF_SIM_PITCH') {
       if (game.subPhase === 'DEF_PITCH') updateCFMovement(dt, now);
-      state.pitchT += dt * state.speed;
-      const p = Math.min(state.pitchT / game.pitchType.dur, 1);
+      const isWaitBatter = game.simResult === 'WAIT_BATTER';
+      state.pitchT += dt * (isWaitBatter ? 1 : state.speed);
+      const p = Math.min(state.pitchT / (isWaitBatter ? game.pitchDur : game.pitchType.dur), 1);
       const pt = game.pitchType;
       ballMesh.position.set(
         PITCH_RELEASE.x * (1 - p) + pt.breakX * p * p,
@@ -4194,12 +4449,13 @@ function updateAllCharacterAnimations(dt, now) {
       ballShadow.position.set(state.ballPos.x, 0.07, state.ballPos.z);
       lookTarget.lerp(state.ballPos, 0.16); camera.lookAt(lookTarget);
       game.timer -= dt;
-      if (game.timer <= 0) enterCurrentRole();
+      if (game.timer <= 0 && (!mp.active || mp.role === 'host')) enterCurrentRole();
     } else if (game.subPhase === 'PICKOFF') {
       updatePickoff(dt, now);
     } else if (game.subPhase === 'STEAL_THROW') {
       updateStealThrow(dt, now);
     }
+    if (mp.active) updateMultiplayerSync(dt);
   } else if (state.mode !== 'game') {
     if (state.phase === 'PITCHING') {
       state.pitchT += dt;
@@ -4254,6 +4510,535 @@ function updateAllCharacterAnimations(dt, now) {
   renderer.render(scene, camera);
 }
 
+const mp = {
+  active: false, socket: null, role: 'host', roomId: '', roomStarted: false, manualLeft: false,
+  hostPos: '', hostOrder: 0,
+  peerPos: '', peerOrder: 0, latestPeerPos: '', latestPeerOrder: 0,
+  holdPeerUntilNextRole: false, waitingNextBall: false,
+  peerBase: 0, lastSentBase: -1,
+  peerX: 0, peerZ: 0, hasPeerPos: false, peerRunner: null, syncTimer: 0, aliveTimer: 0
+};
+
+function getCurrentSetup() {
+  return {
+    pos: document.getElementById('sel-pos').value,
+    order: parseInt(document.getElementById('sel-order').value, 10),
+    hand: document.getElementById('sel-hand').value
+  };
+}
+
+function sendSetupToServer() {
+  if (!mp.active || !mp.socket) return;
+  mp.socket.emit('set_setup', getCurrentSetup());
+}
+document.getElementById('sel-pos').addEventListener('change', sendSetupToServer);
+document.getElementById('sel-order').addEventListener('change', sendSetupToServer);
+document.getElementById('sel-hand').addEventListener('change', sendSetupToServer);
+
+function resetMpToSolo() {
+  mp.active = false; mp.roomId = ''; mp.roomStarted = false; mp.role = 'host';
+  mp.hostPos = ''; mp.hostOrder = 0;
+  mp.peerPos = ''; mp.peerOrder = 0; mp.latestPeerPos = ''; mp.latestPeerOrder = 0;
+  mp.holdPeerUntilNextRole = false; mp.waitingNextBall = false;
+  mp.peerBase = 0; mp.peerRunner = null; mp.hasPeerPos = false;
+}
+
+function syncSetupLocks() {
+  const selPos = document.getElementById('sel-pos');
+  const selOrd = document.getElementById('sel-order');
+  const lockedPos = ['2B', '3B', 'P'];
+  const isGuest = mp.active && mp.role === 'guest';
+  let changed = false;
+  Array.from(selPos.options).forEach(opt => {
+    opt.disabled = lockedPos.includes(opt.value) || (isGuest && mp.hostPos && opt.value === mp.hostPos);
+  });
+  if (selPos.options[selPos.selectedIndex].disabled) {
+    const avail = Array.from(selPos.options).find(o => !o.disabled);
+    if (avail) { selPos.value = avail.value; changed = true; }
+  }
+  Array.from(selOrd.options).forEach(opt => {
+    opt.disabled = isGuest && mp.hostOrder > 0 && parseInt(opt.value, 10) === mp.hostOrder;
+  });
+  if (selOrd.options[selOrd.selectedIndex].disabled) {
+    const avail = Array.from(selOrd.options).find(o => !o.disabled);
+    if (avail) { selOrd.value = avail.value; changed = true; }
+  }
+  if (changed) {
+    updateSetupBanner();
+    sendSetupToServer();
+  }
+}
+
+function updateRoomUI() {
+  const idleEl = document.getElementById('room-idle');
+  const activeEl = document.getElementById('room-active');
+  if (idleEl) idleEl.style.display = mp.active ? 'none' : 'flex';
+  if (activeEl) activeEl.style.display = mp.active ? 'flex' : 'none';
+  const codeEl = document.getElementById('room-code-txt');
+  if (codeEl) codeEl.textContent = mp.roomId || '-';
+  const btn = document.getElementById('btn-start');
+  if (!mp.active) {
+    document.getElementById('mp-status').textContent = '單人模式（可直接開賽，或創建／加入房間）';
+    if (state.mode === 'game') btn.textContent = 'PLAY BALL！（Space）';
+  } else if (mp.role === 'guest') {
+    if (state.mode === 'game') {
+      btn.textContent = mp.roomStarted ? '中途加入比賽（PLAY BALL）' : '等待房主按 PLAY BALL...';
+    }
+  } else {
+    if (state.mode === 'game') btn.textContent = 'PLAY BALL！（Space）';
+  }
+}
+
+function applyPlayersUpdate(payload) {
+  const players = (payload && payload.players) ? payload.players : (payload || {});
+  if (payload && typeof payload.started === 'boolean') mp.roomStarted = payload.started;
+
+  const myId = mp.socket ? mp.socket.id : '';
+  const entries = Object.entries(players);
+  if (myId && players[myId]) mp.role = players[myId].role;
+
+  const hostEntry = entries.find(([, p]) => p.role === 'host');
+  mp.hostPos = hostEntry ? hostEntry[1].pos : '';
+  mp.hostOrder = hostEntry ? hostEntry[1].order : 0;
+
+  const peerEntry = entries.find(([id, p]) => id !== myId && (!mp.roomStarted || p.inGame));
+  const peer = peerEntry ? peerEntry[1] : null;
+  mp.latestPeerPos = peer ? peer.pos : '';
+  mp.latestPeerOrder = peer ? peer.order : 0;
+  if (!mp.holdPeerUntilNextRole) {
+    mp.peerPos = mp.latestPeerPos;
+    mp.peerOrder = mp.latestPeerOrder;
+  }
+
+  const activeCount = entries.filter(([, p]) => p.inGame).length;
+  const txt = entries.map(([, p]) => {
+    const tag = p.role === 'host' ? 'P1房主' : 'P2隊友';
+    const st = mp.roomStarted ? (p.inGame ? '・比賽中' : '・待機') : '';
+    return `${tag}(${p.pos}/${p.order}棒${st})`;
+  }).join(' ｜ ');
+  const countTxt = mp.roomStarted ? `比賽中 ${activeCount}/2人` : `${entries.length}/2人`;
+  document.getElementById('mp-status').textContent = `🟢 房間 ${mp.roomId}（${countTxt}）：${txt}`;
+
+  if (!game.active) updateRoomUI();
+  syncSetupLocks();
+}
+
+function handlePeerLeft(leftPos, promoted) {
+  mp.peerPos = ''; mp.peerOrder = 0;
+  mp.latestPeerPos = ''; mp.latestPeerOrder = 0;
+  mp.holdPeerUntilNextRole = false;
+  mp.peerBase = 0; mp.peerRunner = null; mp.hasPeerPos = false;
+
+  if (promoted) {
+    mp.role = 'host';
+    if (!game.active) updateRoomUI();
+  }
+  syncSetupLocks();
+
+  if (!game.active) {
+    if (promoted) setBanner('已遞補為房主 (P1)', '可等隊友加入或直接按 PLAY BALL');
+    return;
+  }
+
+  liveRunners.forEach(r => { if (r.isPeer) r.isPeer = false; });
+
+  if (game.subPhase === 'OFF_SIM_PITCH' && game.simResult === 'WAIT_BATTER') {
+    game.simResult = null;
+    enterAfterPause(0.6);
+  } else if (promoted && (game.subPhase === 'DEF_PITCH' || game.subPhase === 'OFF_SIM_PITCH') && state.pitchT >= game.pitchType.dur) {
+    enterAfterPause(0.5);
+  } else if (game.subPhase === 'LIVE_PLAY' && game.play && !game.play.resolved) {
+    const pl = game.play;
+    if (pl.fielded && pl.fielderId === leftPos && !pl.throwActive && pl.throwDelay <= 0 && !pl.selfCoverBase && !pl.playerCoverBase) {
+      const f = getFielderById(leftPos);
+      if (f && !pl.flyCaught) handleAIFieldGroundBall(f);
+      else { pl.waitingEnd = true; pl.endCooldown = 0.8; }
+    }
+  } else if (game.subPhase === 'PICKOFF' && game.pickoff) {
+    const pk = game.pickoff;
+    if (pk.isPeer1B) {
+      pk.isPeer1B = false;
+      if (pk.stage === 'HOLD_1B') handlePickoff1BAction(pk.runnerState === 'BREAK' ? 2 : 0, true);
+    }
+    if (pk.isPeerRunner) {
+      pk.isPeerRunner = false;
+      if (pk.runnerState === 'LEAD') pk.runnerState = 'BACK';
+    }
+  }
+
+  setTicker(promoted
+    ? '⚠️ 原 P1 已離開比賽，你遞補為 P1 房主，隊友位置改由 AI 接手！'
+    : '⚠️ P2 已離開比賽，該守位與打席自動改由 AI 接手！');
+}
+
+function updateMultiplayerSync(dt) {
+  if (!mp.active || !game.active) return;
+  mp.aliveTimer += dt;
+  if (mp.aliveTimer >= 2.0 && !document.hidden) {
+    mp.aliveTimer = 0;
+    mp.socket.emit('alive');
+  }
+  if (mp.waitingNextBall) return;
+  if (game.playerBase !== mp.lastSentBase) {
+    mp.lastSentBase = game.playerBase;
+    mp.socket.emit('game_event', { type: 'peer_base', base: game.playerBase });
+  }
+  if (isPlayerDefense() && mp.peerPos && mp.hasPeerPos) {
+    const pf = getFielderById(mp.peerPos);
+    if (pf && pf.mesh.visible && pf.stunTimer <= 0) {
+      pf.pos.x = THREE.MathUtils.lerp(pf.pos.x, mp.peerX, Math.min(1, dt * 16));
+      pf.pos.z = THREE.MathUtils.lerp(pf.pos.z, mp.peerZ, Math.min(1, dt * 16));
+      pf.mesh.position.set(pf.pos.x, 0, pf.pos.z);
+    }
+  }
+  mp.syncTimer += dt;
+  if (mp.syncTimer < 0.05) return;
+  mp.syncTimer = 0;
+  if (isPlayerFielding()) {
+    mp.socket.emit('player_move', { kind: 'fielder', x: player.pos.x, z: player.pos.z });
+  } else if (isPlayerOffense() && game.subPhase === 'LIVE_PLAY') {
+    const mr = liveRunners.find(r => r.isMe);
+    if (mr) {
+      mp.socket.emit('player_move', {
+        kind: 'runner', startBase: mr.startBase,
+        baseFrom: mr.baseFrom, baseTo: mr.baseTo, progress: mr.progress,
+        retreating: mr.retreating, stopped: mr.stopped, leftEarly: mr.leftEarly,
+        out: mr.out, scored: mr.scored
+      });
+    }
+  }
+}
+
+function executeRemoteThrow(posId, manualBase, forceCutoff) {
+  const pl = game.play;
+  const f = getFielderById(posId);
+  if (!pl || !f) return;
+  pl.fielded = true;
+  pl.fielderId = posId;
+  pl.fielderRef = f;
+  pl.waitingEnd = false;
+  pl.endCooldown = 0;
+  pl.selfCoverBase = 0;
+  pl.throwDelay = 0.22;
+  pl.pendingFromPlayer = false;
+  if (forceCutoff || manualBase === 0) {
+    const cutoff = getCutoffFielder(f.pos);
+    pl.relayActive = true;
+    pl.cutoffFielder = cutoff;
+    pl.relayFinalBase = getBestThrowTargetBase(false);
+    pl.pendingThrowTargetPos = cutoff.pos.clone().setY(1.4);
+    pl.pendingThrowTargetBase = -1;
+    setTicker(`${posId} 轉傳 ${cutoff.id}`);
+  } else {
+    const bName = ['本', '一', '二', '三', '本'][manualBase];
+    const cover = getBaseCoverFielder(manualBase, posId);
+    pl.relayActive = false;
+    pl.throwTargetFielder = cover;
+    pl.pendingThrowTargetPos = cover ? cover.pos.clone().setY(1.35) : BASES[manualBase % 4].clone().setY(1.2);
+    pl.pendingThrowTargetBase = manualBase;
+    setTicker(`${posId} 傳${bName}壘！`);
+  }
+}
+
+function initMultiplayer() {
+  if (typeof io === 'undefined') {
+    const idleEl = document.getElementById('room-idle');
+    if (idleEl) idleEl.style.display = 'none';
+    document.getElementById('mp-status').textContent = '單人離線模式（未連線伺服器）';
+    return;
+  }
+  const socket = io();
+  mp.socket = socket;
+
+  const inpRoom = document.getElementById('inp-room-id');
+  inpRoom.addEventListener('keydown', e => e.stopPropagation());
+
+  document.getElementById('btn-create-room').onclick = () => {
+    mp.manualLeft = false;
+    socket.emit('create_room', getCurrentSetup());
+  };
+  document.getElementById('btn-join-room').onclick = () => {
+    const code = inpRoom.value.trim();
+    if (!code) {
+      document.getElementById('mp-status').textContent = '⚠️ 請先輸入 6 位數房間代碼！';
+      return;
+    }
+    mp.manualLeft = false;
+    socket.emit('join_room', { roomId: code, setup: getCurrentSetup(), autoCreate: false });
+  };
+  document.getElementById('btn-leave-room').onclick = () => {
+    mp.manualLeft = true;
+    socket.emit('leave_room');
+    resetMpToSolo();
+    syncSetupLocks();
+    updateRoomUI();
+  };
+  document.getElementById('btn-copy-link').onclick = () => {
+    if (!mp.roomId) return;
+    const url = `${location.origin}${location.pathname}?id=${encodeURIComponent(mp.roomId)}`;
+    const btn = document.getElementById('btn-copy-link');
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(url).then(() => {
+        btn.textContent = '已複製！';
+        setTimeout(() => { btn.textContent = '複製連結'; }, 1500);
+      }).catch(() => prompt('請複製邀請連結給隊友：', url));
+    } else {
+      prompt('請複製邀請連結給隊友：', url);
+    }
+  };
+
+  socket.on('connect', () => {
+    const params = new URLSearchParams(location.search);
+    const urlId = (params.get('id') || params.get('room') || '').trim();
+    if (urlId && !mp.active && !mp.manualLeft) {
+      inpRoom.value = urlId;
+      socket.emit('join_room', { roomId: urlId, setup: getCurrentSetup(), autoCreate: true });
+    }
+  });
+
+  socket.on('room_joined', ({ roomId, role, players, started }) => {
+    mp.active = true;
+    mp.roomId = roomId;
+    mp.role = role;
+    mp.roomStarted = !!started;
+    if (role === 'guest') {
+      document.getElementById('sel-pos').value = 'SS';
+      document.getElementById('sel-order').value = '4';
+      updateSetupBanner();
+    }
+    updateRoomUI();
+    applyPlayersUpdate({ players, started });
+    sendSetupToServer();
+  });
+
+  socket.on('room_error', (msg) => {
+    document.getElementById('mp-status').textContent = `❌ ${msg}`;
+    if (!game.active && state.mode === 'game') setBanner('無法加入', msg);
+  });
+
+  socket.on('room_kicked', (msg) => {
+    mp.manualLeft = true;
+    resetMpToSolo();
+    syncSetupLocks();
+    updateRoomUI();
+    document.getElementById('mp-status').textContent = `⚠️ ${msg}`;
+    if (!game.active && state.mode === 'game') setBanner('已移出房間', msg);
+  });
+  socket.on('match_timeout', (msg) => {
+    if (game.active) {
+      game.active = false;
+      switchMode('game');
+    }
+    document.getElementById('mp-status').textContent = `⚠️ ${msg}`;
+    setBanner('已暫由 AI 接手', '按 PLAY BALL 可重新中途加入比賽');
+  });
+
+  socket.on('players_update', (payload) => {
+    if (!mp.active) return;
+    applyPlayersUpdate(payload);
+  });
+
+  socket.on('peer_left', ({ leftPos, promoted }) => {
+    if (!mp.active) return;
+    handlePeerLeft(leftPos, promoted);
+  });
+
+  // 房主收到有隊友中途按 PLAY BALL 加入
+  socket.on('peer_mid_join', ({ socketId, pos, order }) => {
+    if (!mp.active || !game.active || mp.role !== 'host') return;
+    const waitNext = !['DEF_WAIT', 'OFF_SIM_WAIT', 'BAT_WAIT'].includes(game.subPhase);
+    mp.latestPeerPos = pos;
+    mp.latestPeerOrder = order;
+    if (waitNext) {
+      mp.holdPeerUntilNextRole = true;
+    } else {
+      mp.holdPeerUntilNextRole = false;
+      mp.peerPos = pos;
+      mp.peerOrder = order;
+      game.timer = Math.max(game.timer, 1.3);
+    }
+    socket.emit('mid_join_state', {
+      to: socketId,
+      state: {
+        playerSide: game.playerSide,
+        inning: game.inning, half: game.half,
+        awayScore: game.awayScore, homeScore: game.homeScore,
+        balls: game.balls, strikes: game.strikes, outs: game.outs,
+        bases: game.bases, awayOrder: game.awayOrder, homeOrder: game.homeOrder,
+        hostBase: game.playerBase, waitNext
+      }
+    });
+    setTicker(`🟢 P2隊友(${pos}/${order}棒) 已中途加入比賽！`);
+  });
+
+  // 中途加入者收到房主傳來的即時戰況
+  socket.on('mid_join_state', (st) => {
+    if (!mp.active || state.mode !== 'game') return;
+    resultCard.style.display = 'none';
+    startWrap.style.display = 'none';
+    game.active = true;
+    game.playerPos = document.getElementById('sel-pos').value;
+    game.playerOrder = parseInt(document.getElementById('sel-order').value, 10);
+    game.playerHand = document.getElementById('sel-hand').value;
+    game.playerSide = st.playerSide;
+    game.inning = st.inning; game.half = st.half;
+    game.awayScore = st.awayScore; game.homeScore = st.homeScore;
+    game.balls = st.balls; game.strikes = st.strikes; game.outs = st.outs;
+    game.bases = st.bases; game.awayOrder = st.awayOrder; game.homeOrder = st.homeOrder;
+    game.playerBase = 0;
+    game.stats = { ab: 0, h: 0, hr: 0, bb: 0, rbi: 0, po: 0, e: 0 };
+    mp.peerBase = st.hostBase || 0;
+    mp.peerRunner = null;
+    clearLiveRunners();
+    ticker.style.display = 'block';
+
+    if (st.waitNext) {
+      mp.waitingNextBall = true;
+      enterCurrentRole();
+      hideAllActionUI();
+      game.subPhase = 'PAUSE_NEXT';
+      game.timer = 99;
+      setBanner('已中途加入！', '等待目前這球結束後進場...');
+      setTicker('已中途加入比賽，等待下一球開始！');
+    } else {
+      mp.waitingNextBall = false;
+      enterCurrentRole();
+      setTicker(`已中途加入比賽！（第 ${game.playerOrder} 棒 ${POS_MAP[game.playerPos].name}）`);
+    }
+    updateGameUI();
+  });
+
+  socket.on('disconnect', () => {
+    if (!mp.active) return;
+    const oldPeerPos = mp.peerPos;
+    resetMpToSolo();
+    handlePeerLeft(oldPeerPos, true);
+    updateRoomUI();
+    if (game.active) setTicker('⚠️ 與伺服器斷線，已自動切換為單人 AI 模式繼續比賽！');
+  });
+
+  socket.on('start_game', (cfg) => {
+    if (state.mode !== 'game') {
+      socket.emit('leave_match');
+      return;
+    }
+    mp.roomStarted = true;
+    mp.waitingNextBall = false;
+    startGameMode(true, cfg);
+  });
+
+  socket.on('player_move', (pos) => {
+    if (mp.waitingNextBall) return;
+    if (pos.kind === 'runner') {
+      mp.peerRunner = pos;
+    } else {
+      mp.peerX = pos.x;
+      mp.peerZ = pos.z;
+      mp.hasPeerPos = true;
+    }
+  });
+
+  socket.on('game_event', (ev) => {
+    if (!game.active) return;
+    if (mp.waitingNextBall && ev.type !== 'enter_role') return;
+    if (ev.type === 'enter_role') {
+      mp.waitingNextBall = false;
+      const sideChanged = game.half !== ev.half || game.inning !== ev.inning;
+      game.inning = ev.inning; game.half = ev.half;
+      game.awayScore = ev.awayScore; game.homeScore = ev.homeScore;
+      game.balls = ev.balls; game.strikes = ev.strikes; game.outs = ev.outs;
+      game.bases = ev.bases; game.awayOrder = ev.awayOrder; game.homeOrder = ev.homeOrder;
+      if (sideChanged || isPlayerDefense() || (game.playerBase > 0 && !game.bases[game.playerBase - 1])) {
+        game.playerBase = 0;
+      }
+      enterCurrentRole();
+    } else if (ev.type === 'pitch') {
+      launchSimPitch(ev.isDefense, ev);
+    } else if (ev.type === 'in_play') {
+      startLiveBallInPlay(ev.ev, ev.la, ev.spray, ev.spin, false, ev.tag);
+    } else if (ev.type === 'call_ball' && game.play) {
+      game.play.callerId = ev.pos;
+      game.play.callerIsPlayer = false;
+      AudioFX.tone(580, 0.1);
+      setTicker(`📣 ${ev.pos}(隊友) 喊聲：MY BALL！`);
+      updateDiveBtnState();
+    } else if (ev.type === 'fly_out' && game.play && !game.play.fielded) {
+      handleFlyOut(ev.pos, false);
+    } else if (ev.type === 'pickup' && game.play && !game.play.fielded) {
+      game.play.fielded = true;
+      game.play.fielderId = ev.pos;
+      game.play.fielderRef = getFielderById(ev.pos);
+      AudioFX.glovePop();
+      setTicker(`${ev.pos}(隊友) 撿到球了！`);
+    } else if (ev.type === 'throw' && game.play) {
+      executeRemoteThrow(ev.pos, ev.manualBase, ev.forceCutoff);
+    } else if (ev.type === 'bat_sync' && mp.role === 'host') {
+      const oldBases = game.bases.slice();
+      game.inning = ev.inning; game.half = ev.half;
+      game.awayScore = ev.awayScore; game.homeScore = ev.homeScore;
+      game.balls = ev.balls; game.strikes = ev.strikes; game.outs = ev.outs;
+      game.bases = ev.bases; game.awayOrder = ev.awayOrder; game.homeOrder = ev.homeOrder;
+      if (isPlayerOffense() && game.playerBase > 0 && ev.ticker && ev.ticker.includes('保送')) {
+        if (game.playerBase === 1) game.playerBase = 2;
+        else if (game.playerBase === 2 && oldBases[0]) game.playerBase = 3;
+        else if (game.playerBase === 3 && oldBases[0] && oldBases[1]) game.playerBase = 0;
+      }
+      setTicker(ev.ticker); setBanner(ev.bannerT, ev.bannerS);
+      enterAfterPause(ev.sec || 1.0);
+    } else if (ev.type === 'bat_foul') {
+      game.balls = ev.balls; game.strikes = ev.strikes;
+      AudioFX.crack(0.68);
+      setTicker(ev.ticker);
+      launchVisualBall(ev.ev, ev.la, ev.spray, 0.5);
+      game.subPhase = 'WATCH_FOUL';
+      game.timer = 1.35 / state.speed;
+      updateGameUI();
+    } else if (ev.type === 'peer_base') {
+      mp.peerBase = ev.base;
+    } else if (ev.type === 'runner_cmd') {
+      const r = liveRunners.find(x => x.startBase === ev.startBase);
+      if (r && !r.isMe) {
+        r.isPeer = true;
+        r.targetBase = ev.targetBase;
+        r.retreating = ev.retreating;
+        r.stopped = ev.stopped;
+        if (!ev.retreating && ev.targetBase > r.baseFrom) {
+          if (r.baseTo <= r.baseFrom) r.baseTo = r.baseFrom + 1;
+          if (game.play) { game.play.waitingEnd = false; game.play.flyNoThrow = false; }
+        }
+      }
+    } else if (ev.type === 'steal_start') {
+      if (!game.steal) startStealRun(ev.fromBase, false, ev.speed);
+      if (ev.needPitch && mp.role === 'host' && game.subPhase === 'OFF_SIM_WAIT') {
+        launchSimPitch(false);
+      }
+    } else if (ev.type === 'pickoff') {
+      startPickoff(ev.jumpedEarly, ev);
+    } else if (ev.type === 'pickoff_retreat') {
+      if (game.pickoff) game.pickoff.runnerState = 'BACK';
+    } else if (ev.type === 'pickoff_1b') {
+      handlePickoff1BAction(ev.mode, true);
+    } else if (ev.type === 'step_bag' && game.play && !game.play.resolved) {
+      const pl = game.play;
+      if (pl.steppedBases && pl.steppedBases[ev.base]) return;
+      const f = getFielderById(ev.pos);
+      if (f && (pl.selfCoverBase === ev.base || (pl.throwActive && pl.throwTargetBase === ev.base) || (pl.throwDelay > 0 && pl.pendingThrowTargetBase === ev.base) || (!pl.throwActive && pl.fielderId === ev.pos))) {
+        const bPos = BASES[ev.base % 4];
+        f.pos.set(bPos.x, 0, bPos.z);
+        f.mesh.position.copy(f.pos);
+        pl.selfCoverBase = 0;
+        pl.throwDelay = 0;
+        pl.pendingFromPlayer = false;
+        pl.throwActive = false;
+        pl.tagDelay = 0;
+        pl.throwTargetBase = ev.base;
+        pl.throwTargetFielder = f;
+        resolveThrowArrival();
+      }
+    }
+  });
+}
+initMultiplayer();
 switchMode('game');
 requestAnimationFrame(animate);
 </script>
