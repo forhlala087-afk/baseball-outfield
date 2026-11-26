@@ -897,7 +897,8 @@ const player = {
   diveTimer: 0,
   diveDir: new THREE.Vector3(),
   stunTimer: 0,
-  hasBall: false
+  hasBall: false,
+  autoRun2B: false
 };
 
 const state = {
@@ -964,6 +965,11 @@ window.addEventListener('keydown', e => {
     } else {
       if (state.phase === 'IDLE' || state.phase === 'RESULT') startPracticePitch();
       else if (state.phase === 'IN_FLIGHT' && state.mode === 'chase') triggerDive();
+    }
+  }
+  if (state.mode === 'game' && isPlayerFielding() && game.playerPos === 'SS' && !player.hasBall && (e.code === 'Digit2' || e.code === 'Numpad2')) {
+    if (game.subPhase === 'DEF_PITCH' || game.subPhase === 'STEAL_THROW' || game.subPhase === 'LIVE_PLAY') {
+      player.autoRun2B = true;
     }
   }
   if (state.mode === 'game' && game.subPhase === 'PICKOFF') {
@@ -1037,12 +1043,13 @@ document.querySelectorAll('.base-throw-btn').forEach(btn => {
     const base = parseInt(btn.dataset.base, 10);
     if (state.mode === 'game' && game.subPhase === 'LIVE_PLAY' && isPlayerFielding() && (player.hasBall || (base === 1 && game.playerPos === '1B'))) {
       throwBallFromCF(base, false);
+    } else if (state.mode === 'game' && isPlayerFielding() && game.playerPos === 'SS' && !player.hasBall && base === 2 && (game.subPhase === 'DEF_PITCH' || game.subPhase === 'STEAL_THROW' || game.subPhase === 'LIVE_PLAY')) {
+      player.autoRun2B = true;
     } else if (state.mode === 'game' && game.subPhase === 'PICKOFF' && isPlayerFielding() && base === 2) {
       handlePickoff1BAction(2);
     }
   });
 });
-
 const btnSwing = document.getElementById('btn-swing');
 const btnSteal = document.getElementById('btn-steal');
 const btnRun = document.getElementById('btn-run');
@@ -1174,8 +1181,10 @@ function updateDiveBtnState() {
   const showBaseBtns = state.mode === 'game' && isPlayerFielding();
   document.querySelectorAll('.base-throw-btn').forEach(b => {
     b.style.display = showBaseBtns ? 'flex' : 'none';
-    const is1BReady = b.dataset.base === '1' && game.playerPos === '1B';
-    b.classList.toggle('ready', showBaseBtns && game.subPhase === 'LIVE_PLAY' && (player.hasBall || is1BReady));
+    const is1BReady = b.dataset.base === '1' && game.playerPos === '1B' && game.subPhase === 'LIVE_PLAY';
+    const isSSSteal = b.dataset.base === '2' && game.playerPos === 'SS' && game.steal && game.steal.toBase === 2 && (game.subPhase === 'DEF_PITCH' || game.subPhase === 'STEAL_THROW');
+    const isSSDP = b.dataset.base === '2' && game.playerPos === 'SS' && !player.hasBall && game.subPhase === 'LIVE_PLAY' && game.play && game.bases[0] && game.outs < 2 && game.play.la <= 8 && !game.play.dpCoverDone;
+    b.classList.toggle('ready', showBaseBtns && ((game.subPhase === 'LIVE_PLAY' && player.hasBall) || is1BReady || isSSSteal || isSSDP));
   });
   callBtn.style.display = showBaseBtns ? 'block' : 'none';
   callBtn.className = '';
@@ -1515,7 +1524,7 @@ function throwBallFromCF(manualBase = 0, forceCutoff = false) {
 function resetPlayerCF() {
   player.pos.copy(getPlayerStartPos());
   player.vel.set(0, 0, 0);
-  player.diving = false; player.diveTimer = 0; player.stunTimer = 0; player.hasBall = false;
+  player.diving = false; player.diveTimer = 0; player.stunTimer = 0; player.hasBall = false; player.autoRun2B = false;
   camera.position.copy(player.pos);
   lookTarget.set(0, 2.2, 0);
   camera.lookAt(lookTarget);
@@ -1938,6 +1947,9 @@ function resolveSimPitch(isDefense) {
   if (game.steal && (res === 'FOUL_FLY' || res === 'FOUL_GROUND' || res === 'IN_PLAY')) {
     if (game.steal.mesh) scene.remove(game.steal.mesh);
     game.steal = null;
+    player.autoRun2B = false;
+    setBanner('', '');
+    updateDiveBtnState();
   }
 
   if (res === 'BALL') {
@@ -2900,7 +2912,7 @@ function handleAIFieldGroundBall(f) {
     }
 
     // 一壘或二壘方向滾地球要抓二壘時，若玩家游擊手還沒補位就改傳一壘
-    if (targetBase === 2 && (f.id === '1B' || f.id === '2B') && isPlayerDefense() && game.playerPos === 'SS') {
+    if (targetBase === 2 && f.id === '1B' && isPlayerDefense() && game.playerPos === 'SS') {
       const ssDist2B = Math.hypot(player.pos.x - BASES[2].x, player.pos.z - BASES[2].z);
       if (ssDist2B > 7.5) {
         targetBase = 1;
@@ -3313,6 +3325,10 @@ function startStealRun(fromBase, isMe) {
   if (isMe) {
     runPad.style.display = 'none';
     setTicker(`⚡ 啟動盜壘！衝向${['', '', '二', '三'][fromBase + 1]}壘！`);
+  } else if (isPlayerFielding() && game.playerPos === 'SS' && fromBase === 1) {
+    setBanner('⚠️ 跑者起跑了！', '快按 二（或 2）進二壘補位接阻殺球！');
+    setTicker('📣 1B 喊聲：跑者起跑了！游擊快進二壘補位！');
+    updateDiveBtnState();
   } else {
     setTicker(`⚡ 對手發動盜壘！衝向${['', '', '二', '三'][fromBase + 1]}壘！`);
   }
@@ -3527,10 +3543,22 @@ function updateStealThrow(dt, now) {
     st.mesh.position.set(rPos.x, Math.abs(Math.sin(now * 0.02)) * 0.14, rPos.z);
   }
 
-  const cover = getBaseCoverFielder(st.toBase, '');
-  if (cover && cover.pos && !cover.isPlayer) {
-    moveObjToward(cover.pos, BASES[st.toBase], cover.speed || 7.8, dt);
-    if (cover.mesh) cover.mesh.position.set(cover.pos.x, 0, cover.pos.z);
+  if (st.toBase === 2) {
+    const fSS = getFielderById('SS'), f2B = getFielderById('2B');
+    if (fSS && fSS.mesh.visible) {
+      moveObjToward(fSS.pos, BASES[2], fSS.speed, dt);
+      fSS.mesh.position.set(fSS.pos.x, 0, fSS.pos.z);
+    }
+    if (f2B && f2B.mesh.visible) {
+      moveObjToward(f2B.pos, new THREE.Vector3(0, 0, 46), f2B.speed, dt);
+      f2B.mesh.position.set(f2B.pos.x, 0, f2B.pos.z);
+    }
+  } else {
+    const cover = getBaseCoverFielder(st.toBase, '');
+    if (cover && cover.pos && !cover.isPlayer) {
+      moveObjToward(cover.pos, BASES[st.toBase], cover.speed || 7.8, dt);
+      if (cover.mesh) cover.mesh.position.set(cover.pos.x, 0, cover.pos.z);
+    }
   }
   if (!st.isMe) {
     if (isPlayerFielding()) updateCFMovement(dt, now);
@@ -3560,7 +3588,10 @@ function updateStealThrow(dt, now) {
   } else if (st.stage === 'TAG') {
     st.tagTimer -= dt;
     if (st.tagTimer <= 0) {
-      const safe = st.prog >= 0.98;
+      const ssMissedBag = isPlayerFielding() && game.playerPos === 'SS' && st.toBase === 2
+        && Math.hypot(player.pos.x - BASES[2].x, player.pos.z - BASES[2].z) > 3.2;
+      const safe = st.prog >= 0.98 || ssMissedBag;
+      player.autoRun2B = false;
       const bName = ['', '', '二', '三'][st.toBase];
       if (st.mesh) scene.remove(st.mesh);
       game.steal = null;
@@ -3769,6 +3800,22 @@ function updateCFMovement(dt, now) {
           pl.autoRun1B = false;
           player.pos.x = BASES[1].x;
           player.pos.z = BASES[1].z;
+          player.vel.set(0, 0, 0);
+        } else {
+          input.set(dx / d, 0, dz / d);
+          autoRunning = true;
+        }
+      }
+    } else if (player.autoRun2B) {
+      if (input.lengthSq() > 0.05) {
+        player.autoRun2B = false;
+      } else {
+        const dx = BASES[2].x - player.pos.x, dz = BASES[2].z - player.pos.z;
+        const d = Math.hypot(dx, dz);
+        if (d <= 0.35) {
+          player.autoRun2B = false;
+          player.pos.x = BASES[2].x;
+          player.pos.z = BASES[2].z;
           player.vel.set(0, 0, 0);
         } else {
           input.set(dx / d, 0, dz / d);
