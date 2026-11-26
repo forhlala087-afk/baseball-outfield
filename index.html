@@ -635,25 +635,86 @@ function addFoulLine(sign) {
 }
 addFoulLine(1); addFoulLine(-1);
 
-function createPlayerSilhouette(x, z, shirtColor) {
+function createPlayerSilhouette(x, z, shirtColor, role = 'fielder') {
   const g = new THREE.Group();
   const bodyMat = new THREE.MeshLambertMaterial({ color: shirtColor });
-  const body = new THREE.Mesh(new THREE.CylinderGeometry(0.24, 0.28, 1.1, 8), bodyMat);
-  body.position.y = 0.95;
-  const head = new THREE.Mesh(new THREE.SphereGeometry(0.18, 10, 10), new THREE.MeshLambertMaterial({ color: 0xffd5b8 }));
-  head.position.y = 1.65;
-  const legs = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.22, 0.5, 8), new THREE.MeshLambertMaterial({ color: 0xeeeeee }));
-  legs.position.y = 0.25;
-  g.add(body, head, legs);
+  const skinMat = new THREE.MeshLambertMaterial({ color: 0xffd5b8 });
+  const pantsMat = new THREE.MeshLambertMaterial({ color: 0xeeeeee });
+  const shoeMat = new THREE.MeshLambertMaterial({ color: 0x222222 });
+  const gloveMat = new THREE.MeshLambertMaterial({ color: 0x8d5524 });
+  const batMat = new THREE.MeshLambertMaterial({ color: 0xd7a86e });
+
+  // 軀幹
+  const torso = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.64, 0.24), bodyMat);
+  torso.position.y = 1.06;
+  g.add(torso);
+
+  // 頭部＋球帽＋帽簷（朝 +Z 方向）
+  const headGroup = new THREE.Group();
+  headGroup.position.y = 1.56;
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.16, 10, 10), skinMat);
+  const cap = new THREE.Mesh(new THREE.SphereGeometry(0.172, 10, 8, 0, Math.PI * 2, 0, Math.PI * 0.55), bodyMat);
+  cap.position.y = 0.02;
+  const brim = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.03, 0.14), bodyMat);
+  brim.position.set(0, 0.04, 0.16);
+  headGroup.add(head, cap, brim);
+  g.add(headGroup);
+
+  // 建立四肢關節（從肩膀／髖部往下長，方便旋轉擺動）
+  function makeLimb(w, h, d, mat, lowerMat, shoe) {
+    const pivot = new THREE.Group();
+    const upper = new THREE.Mesh(new THREE.BoxGeometry(w, h * 0.5, d), mat);
+    upper.position.y = -h * 0.25;
+    const lower = new THREE.Mesh(new THREE.BoxGeometry(w * 0.88, h * 0.5, d * 0.88), lowerMat);
+    lower.position.y = -h * 0.72;
+    pivot.add(upper, lower);
+    if (shoe) {
+      const ft = new THREE.Mesh(new THREE.BoxGeometry(w * 0.95, 0.1, d * 1.45), shoeMat);
+      ft.position.set(0, -h + 0.02, 0.04);
+      pivot.add(ft);
+    }
+    return pivot;
+  }
+
+  // 左手（+X，戴手套）與右手（-X，傳球／握棒）
+  const leftArm = makeLimb(0.12, 0.62, 0.12, bodyMat, skinMat, false);
+  leftArm.position.set(0.28, 1.32, 0);
+  const rightArm = makeLimb(0.12, 0.62, 0.12, bodyMat, skinMat, false);
+  rightArm.position.set(-0.28, 1.32, 0);
+
+  // 手套（掛在左手末端）
+  const glove = new THREE.Mesh(new THREE.SphereGeometry(0.12, 8, 8), gloveMat);
+  glove.scale.set(0.9, 1.15, 0.75);
+  glove.position.set(0, -0.62, 0.04);
+  glove.visible = (role === 'fielder' || role === 'pitcher' || role === 'catcher');
+  leftArm.add(glove);
+
+  // 球棒（掛在右手末端，僅打者顯示）
+  const bat = new THREE.Mesh(new THREE.CylinderGeometry(0.036, 0.018, 0.92, 8), batMat);
+  bat.position.set(0, -0.60, 0.42);
+  bat.rotation.x = Math.PI * 0.42;
+  bat.visible = (role === 'batter');
+  rightArm.add(bat);
+
+  // 左右腳
+  const leftLeg = makeLimb(0.15, 0.74, 0.15, pantsMat, pantsMat, true);
+  leftLeg.position.set(0.11, 0.74, 0);
+  const rightLeg = makeLimb(0.15, 0.74, 0.15, pantsMat, pantsMat, true);
+  rightLeg.position.set(-0.11, 0.74, 0);
+
+  g.add(leftArm, rightArm, leftLeg, rightLeg);
   g.position.set(x, 0, z);
-  g.userData.bodyMat = bodyMat;
+  g.userData = {
+    bodyMat, leftArm, rightArm, leftLeg, rightLeg, glove, bat,
+    prevPos: new THREE.Vector3(x, 0, z)
+  };
   scene.add(g);
   return g;
 }
 
-const pitcherMesh = createPlayerSilhouette(0, 18.44, 0x1565c0);
-const batterMesh = createPlayerSilhouette(0.9, 0.2, 0xc62828);
-const catcherMesh = createPlayerSilhouette(0, -1.6, 0x1565c0);
+const pitcherMesh = createPlayerSilhouette(0, 18.44, 0x1565c0, 'pitcher');
+const batterMesh = createPlayerSilhouette(0.9, 0.2, 0xc62828, 'batter');
+const catcherMesh = createPlayerSilhouette(0, -1.6, 0x1565c0, 'catcher');
 
 const FIELDER_DEFS = [
   { id: '1B', x: -18.2, z: 23.6, type: 'IF', speed: 7.4, reach: 2.1 },
@@ -3729,7 +3790,155 @@ const lookTarget = new THREE.Vector3(0, 2.2, 0);
 let lastTime = performance.now(), accum = 0;
 const FIXED_DT = 1 / 120;
 
-function animate(now) {
+function animateHumanoid(mesh, dt, now, opts = {}) {
+  if (!mesh || !mesh.visible || !mesh.userData.leftArm) return;
+  const u = mesh.userData;
+  if (opts.hideGlove && u.glove) u.glove.visible = false;
+
+  const dx = mesh.position.x - u.prevPos.x;
+  const dz = mesh.position.z - u.prevPos.z;
+  const spd = Math.hypot(dx, dz) / Math.max(dt, 0.001);
+  u.prevPos.copy(mesh.position);
+
+  const lerp = (a, b) => THREE.MathUtils.lerp(a, b, Math.min(1, dt * 14));
+
+  if (opts.stunned) {
+    u.leftArm.rotation.x = -0.6; u.rightArm.rotation.x = -0.6;
+    u.leftLeg.rotation.x = 0.2; u.rightLeg.rotation.x = -0.2;
+    return;
+  }
+
+  if (opts.pitchP !== undefined) {
+    mesh.rotation.y = Math.PI;
+    const p = opts.pitchP;
+    if (p < 0.35) {
+      const k = p / 0.35;
+      u.leftLeg.rotation.x = -1.1 * k;
+      u.rightLeg.rotation.x = 0.15 * k;
+      u.rightArm.rotation.x = -2.2 * k;
+      u.leftArm.rotation.x = -0.8 * k;
+    } else {
+      const k = Math.min(1, (p - 0.35) / 0.35);
+      u.leftLeg.rotation.x = THREE.MathUtils.lerp(-1.1, 0.25, k);
+      u.rightLeg.rotation.x = -0.25 * k;
+      u.rightArm.rotation.x = THREE.MathUtils.lerp(-2.2, 1.35, k);
+      u.leftArm.rotation.x = THREE.MathUtils.lerp(-0.8, 0.4, k);
+    }
+    return;
+  }
+
+  if (opts.swing) {
+    mesh.rotation.y = -Math.PI / 2;
+    u.rightArm.rotation.x = lerp(u.rightArm.rotation.x, -1.45);
+    u.rightArm.rotation.z = lerp(u.rightArm.rotation.z, 1.15);
+    u.leftArm.rotation.x = lerp(u.leftArm.rotation.x, -1.1);
+    u.leftLeg.rotation.x = lerp(u.leftLeg.rotation.x, -0.25);
+    u.rightLeg.rotation.x = lerp(u.rightLeg.rotation.x, 0.25);
+    return;
+  }
+
+  if (opts.batterReady) {
+    mesh.rotation.y = -Math.PI / 2;
+    u.rightArm.rotation.x = lerp(u.rightArm.rotation.x, -2.15);
+    u.rightArm.rotation.z = lerp(u.rightArm.rotation.z, -0.35);
+    u.leftArm.rotation.x = lerp(u.leftArm.rotation.x, -1.55);
+    u.leftLeg.rotation.x = lerp(u.leftLeg.rotation.x, 0.1);
+    u.rightLeg.rotation.x = lerp(u.rightLeg.rotation.x, -0.1);
+    return;
+  }
+
+  if (opts.crouch) {
+    mesh.rotation.y = 0;
+    mesh.position.y = -0.28;
+    u.leftLeg.rotation.x = -0.95; u.rightLeg.rotation.x = -0.95;
+    u.leftArm.rotation.x = -1.15; u.rightArm.rotation.x = -0.45;
+    return;
+  }
+
+  if (opts.throwing) {
+    const k = opts.throwP || 0;
+    u.rightArm.rotation.x = k < 0.65 ? -2.35 : 1.25;
+    u.leftArm.rotation.x = -0.7;
+    u.leftLeg.rotation.x = -0.35; u.rightLeg.rotation.x = 0.25;
+    return;
+  }
+
+  if (opts.tagging) {
+    u.leftArm.rotation.x = -1.25 + Math.sin(now * 0.04) * 0.45;
+    u.rightArm.rotation.x = -0.3;
+    u.leftLeg.rotation.x = -0.35; u.rightLeg.rotation.x = 0.35;
+    return;
+  }
+
+  if (spd > 0.45) {
+    mesh.rotation.y = Math.atan2(dx, dz);
+    const amp = Math.min(1, spd / 5.5);
+    const s = Math.sin(now * 0.02);
+    u.leftLeg.rotation.x = s * 0.85 * amp;
+    u.rightLeg.rotation.x = -s * 0.85 * amp;
+    u.leftArm.rotation.x = -s * 0.72 * amp;
+    u.rightArm.rotation.x = s * 0.72 * amp;
+    u.rightArm.rotation.z = 0;
+  } else {
+    if (opts.idleYaw !== undefined) mesh.rotation.y = opts.idleYaw;
+    u.leftLeg.rotation.x = lerp(u.leftLeg.rotation.x, 0.05);
+    u.rightLeg.rotation.x = lerp(u.rightLeg.rotation.x, -0.05);
+    u.leftArm.rotation.x = lerp(u.leftArm.rotation.x, -0.28);
+    u.rightArm.rotation.x = lerp(u.rightArm.rotation.x, -0.2);
+    u.rightArm.rotation.z = lerp(u.rightArm.rotation.z, 0);
+  }
+}
+
+function updateAllCharacterAnimations(dt, now) {
+  const pl = game.play;
+  const isSimPitch = state.mode === 'game' && (game.subPhase === 'DEF_PITCH' || game.subPhase === 'OFF_SIM_PITCH');
+  const isBatPitch = state.mode === 'game' && game.subPhase === 'BAT_PITCH';
+  const isPracPitch = state.mode !== 'game' && state.phase === 'PITCHING';
+
+  // 投手動作
+  let pitchP;
+  if (isSimPitch) pitchP = Math.min(1, state.pitchT / Math.max(0.1, game.pitchType.dur));
+  else if (isBatPitch) pitchP = Math.min(1, state.pitchT / Math.max(0.1, game.pitchDur));
+  else if (isPracPitch) pitchP = Math.min(1, state.pitchT / 0.48);
+  animateHumanoid(pitcherMesh, dt, now, { pitchP, idleYaw: Math.PI });
+
+  // 打者動作（準備打擊 / 揮棒）
+  const aiSwing = isSimPitch && pitchP > 0.72 && game.simResult !== 'BALL' && game.simResult !== 'STRIKE_LOOK';
+  const pracSwing = state.mode !== 'game' && state.phase === 'IN_FLIGHT' && state.flightT < 0.35;
+  const liveSwing = state.mode === 'game' && ((game.subPhase === 'LIVE_PLAY' && pl && pl.elapsed < 0.35) || game.subPhase === 'WATCH_FOUL');
+  animateHumanoid(batterMesh, dt, now, { swing: aiSwing || pracSwing || liveSwing, batterReady: true });
+
+  // 捕手動作（平時蹲捕，抓盜壘時起身傳球）
+  const catcherThrow = state.mode === 'game' && game.subPhase === 'STEAL_THROW' && game.steal && (game.steal.stage === 'POP' || game.steal.stage === 'THROW');
+  if (catcherThrow) {
+    catcherMesh.position.y = 0;
+    catcherMesh.rotation.y = 0;
+    animateHumanoid(catcherMesh, dt, now, { throwing: true, throwP: game.steal.stage === 'POP' ? 0.3 : 0.9 });
+  } else {
+    animateHumanoid(catcherMesh, dt, now, { crouch: true });
+  }
+
+  // 所有守備員
+  fielders.forEach(f => {
+    const isThrower = pl && pl.fielderRef === f && pl.throwDelay > 0;
+    const isTagger = pl && pl.fielderRef === f && pl.tagDelay > 0;
+    const idleYaw = Math.atan2(-f.pos.x, -f.pos.z);
+    animateHumanoid(f.mesh, dt, now, {
+      stunned: f.stunTimer > 0,
+      throwing: isThrower,
+      throwP: isThrower ? (1 - pl.throwDelay / 0.44) : 0,
+      tagging: isTagger,
+      idleYaw
+    });
+  });
+
+  // 所有跑者（收起手套）
+  staticRunners.forEach((m, i) => animateHumanoid(m, dt, now, { hideGlove: true, idleYaw: Math.atan2(-m.position.x, 18.44 - m.position.z) }));
+  liveRunners.forEach(r => animateHumanoid(r.mesh, dt, now, { hideGlove: true }));
+  if (game.steal && game.steal.mesh) animateHumanoid(game.steal.mesh, dt, now, { hideGlove: true });
+  if (game.pickoff && game.pickoff.runnerMesh) animateHumanoid(game.pickoff.runnerMesh, dt, now, { hideGlove: true });
+}
+  function animate(now) {
   requestAnimationFrame(animate);
   const dt = Math.min((now - lastTime) / 1000, 0.05);
   lastTime = now;
@@ -3872,7 +4081,8 @@ function animate(now) {
     }
   }
 
-  drawMinimap();
+  updateAllCharacterAnimations(dt, now);
+    drawMinimap();
   renderer.render(scene, camera);
 }
 
