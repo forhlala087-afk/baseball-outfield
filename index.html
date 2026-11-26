@@ -3808,25 +3808,93 @@ function animateHumanoid(mesh, dt, now, opts = {}) {
     return;
   }
 
-  if (opts.pitchP !== undefined) {
-    mesh.rotation.y = Math.PI;
+  if (opts.pitchMode) {
+    const isSet = opts.pitchMode === 'set';
+    const w = opts.windupP || 0;
     const p = opts.pitchP;
-    if (p < 0.35) {
-      const k = p / 0.35;
-      u.leftLeg.rotation.x = -1.1 * k;
-      u.rightLeg.rotation.x = 0.15 * k;
-      u.rightArm.rotation.x = -2.2 * k;
-      u.leftArm.rotation.x = -0.8 * k;
+
+    if (p === undefined) {
+      mesh.rotation.x = lerp(mesh.rotation.x, 0);
+      if (isSet) {
+        // 封閉式（壘上有人）：側身套胸前 → 快速小抬腿
+        mesh.rotation.y = lerp(mesh.rotation.y, Math.PI * 0.5);
+        u.leftArm.rotation.x = lerp(u.leftArm.rotation.x, -1.05);
+        u.leftArm.rotation.z = lerp(u.leftArm.rotation.z, -0.32);
+        u.rightArm.rotation.x = lerp(u.rightArm.rotation.x, -1.05);
+        u.rightArm.rotation.z = lerp(u.rightArm.rotation.z, 0.32);
+        u.leftLeg.rotation.x = lerp(u.leftLeg.rotation.x, -0.68 * w);
+        u.rightLeg.rotation.x = lerp(u.rightLeg.rotation.x, 0.1 * w);
+      } else if (w <= 0) {
+        // 開放式（壘上無人）預備：正面朝本壘
+        mesh.rotation.y = lerp(mesh.rotation.y, Math.PI);
+        u.leftArm.rotation.x = lerp(u.leftArm.rotation.x, -0.55);
+        u.leftArm.rotation.z = lerp(u.leftArm.rotation.z, -0.2);
+        u.rightArm.rotation.x = lerp(u.rightArm.rotation.x, -0.55);
+        u.rightArm.rotation.z = lerp(u.rightArm.rotation.z, 0.2);
+        u.leftLeg.rotation.x = lerp(u.leftLeg.rotation.x, 0.05);
+        u.rightLeg.rotation.x = lerp(u.rightLeg.rotation.x, -0.05);
+      } else if (w < 0.42) {
+        // 開放式第一段：雙手高舉過頭
+        const k = w / 0.42;
+        mesh.rotation.y = Math.PI;
+        u.leftArm.rotation.x = THREE.MathUtils.lerp(-0.55, -2.65, k);
+        u.rightArm.rotation.x = THREE.MathUtils.lerp(-0.55, -2.65, k);
+        u.leftArm.rotation.z = -0.18;
+        u.rightArm.rotation.z = 0.18;
+        u.leftLeg.rotation.x = 0.12 * k;
+        u.rightLeg.rotation.x = -0.08 * k;
+      } else {
+        // 開放式第二段：轉身側向＋高抬腿蓄力
+        const k = (w - 0.42) / 0.58;
+        mesh.rotation.y = THREE.MathUtils.lerp(Math.PI, Math.PI * 0.52, k);
+        u.leftArm.rotation.x = THREE.MathUtils.lerp(-2.65, -1.05, k);
+        u.rightArm.rotation.x = THREE.MathUtils.lerp(-2.65, -1.05, k);
+        u.leftArm.rotation.z = -0.28;
+        u.rightArm.rotation.z = 0.28;
+        u.leftLeg.rotation.x = THREE.MathUtils.lerp(0.12, -1.28, k);
+        u.rightLeg.rotation.x = 0.12 * k;
+      }
+      return;
+    }
+
+    // 跨步出手與收尾（p: 0 → 1）
+    const startLeg = isSet ? -0.68 : -1.28;
+    if (p < 0.24) {
+      // 跨步拉弓
+      const k = p / 0.24;
+      mesh.rotation.y = THREE.MathUtils.lerp(Math.PI * 0.52, Math.PI * 0.88, k);
+      mesh.rotation.x = 0.12 * k;
+      u.leftLeg.rotation.x = THREE.MathUtils.lerp(startLeg, -0.52, k);
+      u.rightLeg.rotation.x = THREE.MathUtils.lerp(0.1, 0.48, k);
+      u.rightArm.rotation.x = THREE.MathUtils.lerp(-1.05, -2.35, k);
+      u.rightArm.rotation.z = THREE.MathUtils.lerp(0.28, -0.45, k);
+      u.leftArm.rotation.x = THREE.MathUtils.lerp(-1.05, -1.4, k);
+      u.leftArm.rotation.z = -0.2;
+    } else if (p < 0.55) {
+      // 轉腰甩臂放球＋後腳帶起
+      const k = (p - 0.24) / 0.31;
+      mesh.rotation.y = THREE.MathUtils.lerp(Math.PI * 0.88, Math.PI * 1.18, k);
+      mesh.rotation.x = THREE.MathUtils.lerp(0.12, 0.24, k);
+      u.leftLeg.rotation.x = THREE.MathUtils.lerp(-0.52, -0.18, k);
+      u.rightLeg.rotation.x = THREE.MathUtils.lerp(0.48, 0.62, k);
+      u.rightArm.rotation.x = THREE.MathUtils.lerp(-2.35, 1.05, k);
+      u.rightArm.rotation.z = THREE.MathUtils.lerp(-0.45, 0.38, k);
+      u.leftArm.rotation.x = THREE.MathUtils.lerp(-1.4, -0.45, k);
+      u.leftArm.rotation.z = 0.1;
     } else {
-      const k = Math.min(1, (p - 0.35) / 0.35);
-      u.leftLeg.rotation.x = THREE.MathUtils.lerp(-1.1, 0.25, k);
-      u.rightLeg.rotation.x = -0.25 * k;
-      u.rightArm.rotation.x = THREE.MathUtils.lerp(-2.2, 1.35, k);
-      u.leftArm.rotation.x = THREE.MathUtils.lerp(-0.8, 0.4, k);
+      // 收尾回正準備守備
+      const k = (p - 0.55) / 0.45;
+      mesh.rotation.y = THREE.MathUtils.lerp(Math.PI * 1.18, Math.PI, k);
+      mesh.rotation.x = THREE.MathUtils.lerp(0.24, 0, k);
+      u.leftLeg.rotation.x = THREE.MathUtils.lerp(-0.18, 0.05, k);
+      u.rightLeg.rotation.x = THREE.MathUtils.lerp(0.62, -0.05, k);
+      u.rightArm.rotation.x = THREE.MathUtils.lerp(1.05, -0.25, k);
+      u.rightArm.rotation.z = THREE.MathUtils.lerp(0.38, 0, k);
+      u.leftArm.rotation.x = THREE.MathUtils.lerp(-0.45, -0.3, k);
+      u.leftArm.rotation.z = 0;
     }
     return;
   }
-
   if (opts.swing) {
     mesh.rotation.y = -Math.PI / 2;
     u.rightArm.rotation.x = lerp(u.rightArm.rotation.x, -1.45);
@@ -3895,12 +3963,19 @@ function updateAllCharacterAnimations(dt, now) {
   const isBatPitch = state.mode === 'game' && game.subPhase === 'BAT_PITCH';
   const isPracPitch = state.mode !== 'game' && state.phase === 'PITCHING';
 
-  // 投手動作
-  let pitchP;
+  // 投手動作（壘上無人開放式 windup / 壘上有人封閉式 set）
+  const hasRunner = state.mode === 'game' && (game.bases[0] || game.bases[1] || game.bases[2]);
+  const isWaitPitch = state.mode === 'game' && (game.subPhase === 'DEF_WAIT' || game.subPhase === 'OFF_SIM_WAIT' || game.subPhase === 'BAT_WAIT');
+  let pitchP, windupP = 0;
   if (isSimPitch) pitchP = Math.min(1, state.pitchT / Math.max(0.1, game.pitchType.dur));
   else if (isBatPitch) pitchP = Math.min(1, state.pitchT / Math.max(0.1, game.pitchDur));
   else if (isPracPitch) pitchP = Math.min(1, state.pitchT / 0.48);
-  animateHumanoid(pitcherMesh, dt, now, { pitchP, idleYaw: Math.PI });
+  else if (isWaitPitch) {
+    const winDur = (hasRunner ? 0.34 : 0.68) / (game.subPhase === 'BAT_WAIT' ? 1 : state.speed);
+    if (game.timer < winDur) windupP = Math.min(1, 1 - game.timer / winDur);
+  }
+  const pitchMode = (pitchP !== undefined || isWaitPitch) ? (hasRunner ? 'set' : 'windup') : null;
+  animateHumanoid(pitcherMesh, dt, now, { pitchMode, windupP, pitchP, idleYaw: Math.PI });
 
   // 打者動作（準備打擊 / 揮棒）
   const aiSwing = isSimPitch && pitchP > 0.72 && game.simResult !== 'BALL' && game.simResult !== 'STRIKE_LOOK';
